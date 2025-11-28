@@ -79,11 +79,6 @@ export function ProductDetailPage({
   // Use product from prop or find by ID
   const product = productProp || (productId ? products.find((p) => p.id === productId) : null)
   
-  // Scroll to top when product page loads
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [productId])
-  
   if (!product) {
     return (
       <div className="flex min-h-screen items-center justify-center">

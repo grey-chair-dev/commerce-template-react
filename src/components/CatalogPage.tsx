@@ -64,11 +64,6 @@ export function CatalogPage({
 }: CatalogPageProps) {
   const navigate = useNavigate()
   const location = useLocation()
-
-  // Scroll to top when shop page loads
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [location.pathname])
   const [searchParams, setSearchParams] = useSearchParams()
   const categoryFromUrl = searchParams.get('category')
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryFromUrl || 'All')

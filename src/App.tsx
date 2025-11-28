@@ -182,16 +182,12 @@ function App() {
   useEffect(() => {
     if (location.pathname.startsWith('/product/')) {
       setPdpProduct(null)
-      // Scroll to top when navigating to product page
-      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }, [location.pathname, setPdpProduct])
 
-  // Scroll to top when navigating to shop page
+  // Scroll to top when navigating to any page
   useEffect(() => {
-    if (location.pathname === '/shop' || location.pathname.startsWith('/shop/')) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [location.pathname])
 
 
