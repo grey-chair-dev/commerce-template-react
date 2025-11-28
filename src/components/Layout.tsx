@@ -68,7 +68,7 @@ export function Layout({
         onProductSelect={onProductSelect}
       />
       <div className="pt-24 sm:pt-32 md:pt-44">
-        {children}
+      {children}
       </div>
       <Footer
         orderTrackingEnabled={orderTrackingEnabled}
