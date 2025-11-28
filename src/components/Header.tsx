@@ -108,7 +108,16 @@ export function Header({
           {/* Top row - Mobile first layout */}
           <div className="flex items-center justify-between gap-2 py-3 sm:gap-3 sm:py-3.5 md:py-4">
             {/* Branding - Mobile first: minimal, then expand */}
-            <Link to="/" className="hover:opacity-90 transition-all duration-200 flex-shrink-0 min-w-0 group">
+            <Link 
+              to="/" 
+              className="hover:opacity-90 transition-all duration-200 flex-shrink-0 min-w-0 group"
+              onClick={(e) => {
+                if (location.pathname === '/') {
+                  e.preventDefault()
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }
+              }}
+            >
               <div className="min-w-0">
                 <p className="hidden md:block text-xs uppercase tracking-[0.3em] text-slate-400/80 mb-0.5">
                   Powered by Square · Neon · Upstash
@@ -352,7 +361,13 @@ export function Header({
               <nav className="flex flex-col gap-1">
                 <Link
                   to="/"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={(e) => {
+                    setIsMobileMenuOpen(false)
+                    if (location.pathname === '/') {
+                      e.preventDefault()
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }
+                  }}
                   className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
                     isActive('/') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
@@ -448,6 +463,12 @@ export function Header({
           <nav className="hidden sm:flex items-center gap-1 border-t border-white/10 py-2.5 lg:py-3">
           <Link
             to="/"
+            onClick={(e) => {
+              if (location.pathname === '/') {
+                e.preventDefault()
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }
+            }}
               className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
                 isActive('/') 
                   ? 'text-primary bg-primary/10 font-semibold' 
