@@ -27,10 +27,10 @@ const SectionShell = ({
   description?: string
   children: ReactNode
 }) => (
-  <section className="rounded-3xl border border-white/10 bg-white/5 p-6 lg:p-8 shadow-brand">
-    <div className="mb-6">
-      <h2 className="text-2xl font-semibold text-text">{title}</h2>
-      {description ? <p className="mt-2 text-sm text-slate-300">{description}</p> : null}
+  <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-brand sm:rounded-3xl sm:p-6 lg:p-8">
+    <div className="mb-4 sm:mb-6">
+      <h2 className="text-xl font-semibold text-text sm:text-2xl">{title}</h2>
+      {description ? <p className="mt-2 text-xs text-slate-300 sm:text-sm">{description}</p> : null}
     </div>
     {children}
   </section>
@@ -102,31 +102,31 @@ export function HomePage({
   const effectiveWishlist = wishlistFeatureEnabled ? wishlist : []
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
-      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-8 shadow-brand">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 text-text sm:gap-8 sm:px-6 sm:py-10 lg:px-8">
+      <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-4 shadow-brand sm:rounded-3xl sm:p-6 lg:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <p className="text-xs uppercase tracking-[0.4em] text-secondary">Live</p>
-            <h2 className="text-4xl font-semibold leading-tight text-text sm:text-5xl">
+            <h2 className="text-2xl font-semibold leading-tight text-text sm:text-4xl lg:text-5xl">
               {siteConfig.hero.headline}
             </h2>
-            <p className="max-w-2xl text-lg text-slate-100">{siteConfig.hero.subheading}</p>
-            <div className="flex flex-wrap gap-3">
-              <button className="rounded-full bg-primary px-8 py-3 text-base font-semibold text-white shadow-brand transition hover:bg-primary/80">
+            <p className="max-w-2xl text-base text-slate-100 sm:text-lg">{siteConfig.hero.subheading}</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
+              <button className="w-full rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary/80 min-h-[44px] sm:w-auto sm:px-8 sm:text-base">
                 {siteConfig.hero.primaryCta}
               </button>
-              <button className="rounded-full border border-white/30 px-8 py-3 text-base font-semibold text-white/80 hover:border-white/60">
+              <button className="w-full rounded-full border border-white/30 px-6 py-3 text-sm font-semibold text-white/80 hover:border-white/60 min-h-[44px] sm:w-auto sm:px-8 sm:text-base">
                 {siteConfig.hero.secondaryCta}
               </button>
               <button
-                className="rounded-full border border-white/20 px-6 py-3 text-base font-semibold text-white/80 hover:border-white/40"
+                className="w-full rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 hover:border-white/40 min-h-[44px] sm:w-auto sm:px-6 sm:text-base"
                 onClick={onSearch}
               >
                 Search catalog
               </button>
             </div>
           </div>
-          <div className="w-full max-w-sm rounded-2xl border border-white/20 bg-surface/70 p-6 text-sm text-slate-300">
+          <div className="w-full rounded-2xl border border-white/20 bg-surface/70 p-4 text-sm text-slate-300 sm:max-w-sm sm:p-6">
             <p className="text-xs uppercase tracking-[0.4em] text-secondary">
               Real-time adapter health
             </p>
@@ -170,12 +170,29 @@ export function HomePage({
         title="Product catalog"
         description="Backed by the mandated onSnapshot adapter subscribed to /artifacts/{appId}/public/data/products."
       >
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        {/* Mobile: Hours and CTA */}
+        <div className="sm:hidden space-y-3 mb-4">
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-[0.2em]">Store Hours</p>
+              <p className="text-sm font-semibold text-white mt-1">{siteConfig.contact.hours}</p>
+            </div>
+            <button
+              onClick={() => navigate('/catalog')}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-primary/80 min-h-[44px] whitespace-nowrap"
+            >
+              {siteConfig.hero.primaryCta}
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop: Filters and Sort */}
+        <div className="hidden sm:flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => (
               <button
                 key={category}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
+                className={`rounded-full border px-3 py-2 text-xs transition min-h-[44px] sm:px-4 sm:text-sm ${
                   category === selectedCategory
                     ? 'border-primary bg-primary/20 text-white'
                     : 'border-white/10 text-slate-300 hover:border-white/30'
@@ -191,7 +208,7 @@ export function HomePage({
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
-              className="rounded-full border border-white/20 bg-transparent px-4 py-2 text-sm text-white focus:outline-none"
+              className="rounded-full border border-white/20 bg-transparent px-3 py-2 text-sm text-white focus:outline-none min-h-[44px] sm:px-4"
             >
               <option value="featured">Inventory (desc)</option>
               <option value="priceAsc">Price · low → high</option>
@@ -200,7 +217,7 @@ export function HomePage({
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 grid gap-4 sm:mt-6 sm:grid-cols-2 sm:gap-6 xl:grid-cols-3">
           {displayProducts.map((product) => (
             <article
               key={product.id}
@@ -218,13 +235,13 @@ export function HomePage({
                   {product.category}
                 </span>
               </div>
-              <div className="flex flex-1 flex-col gap-3 p-5">
+              <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-semibold text-white">{product.name}</p>
-                    <p className="text-sm text-slate-400">{product.description}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-semibold text-white sm:text-lg truncate">{product.name}</p>
+                    <p className="text-xs text-slate-400 sm:text-sm line-clamp-2">{product.description}</p>
                   </div>
-                  <span className="text-base font-semibold text-secondary">
+                  <span className="text-sm font-semibold text-secondary flex-shrink-0 sm:text-base">
                     {moneyFormatter.format(product.price)}
                   </span>
                 </div>
@@ -248,9 +265,9 @@ export function HomePage({
                     }}
                   />
                 </div>
-                <div className="mt-auto flex flex-wrap gap-2">
+                <div className="mt-auto flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                   <button
-                    className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
+                    className="flex-1 rounded-full border border-white/20 px-3 py-2.5 text-xs text-white/80 hover:border-white/40 min-h-[44px] sm:px-4"
                     onClick={(e) => {
                       e.stopPropagation()
                       onQuickView(product)
@@ -259,7 +276,7 @@ export function HomePage({
                     Quick view
                   </button>
                   <button
-                    className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
+                    className="flex-1 rounded-full border border-white/20 px-3 py-2.5 text-xs text-white/80 hover:border-white/40 min-h-[44px] sm:px-4"
                     onClick={(e) => {
                       e.stopPropagation()
                       onViewDetails(product)
@@ -269,7 +286,7 @@ export function HomePage({
                   </button>
                   {wishlistFeatureEnabled ? (
                     <button
-                      className={`rounded-full border px-4 py-2 text-xs font-semibold ${
+                      className={`rounded-full border px-3 py-2.5 text-xs font-semibold min-h-[44px] sm:px-4 ${
                         effectiveWishlist.some((item) => item.id === product.id)
                           ? 'border-secondary text-secondary'
                           : 'border-white/20 text-white/80 hover:border-white/40'
@@ -283,7 +300,7 @@ export function HomePage({
                     </button>
                   ) : null}
                   <button
-                    className="w-full rounded-full bg-primary/80 px-4 py-2 text-xs font-semibold text-white shadow-brand"
+                    className="w-full rounded-full bg-primary/80 px-4 py-2.5 text-xs font-semibold text-white shadow-brand min-h-[44px] sm:w-full"
                     onClick={(e) => {
                       e.stopPropagation()
                       onAddToCart(product)
@@ -321,15 +338,15 @@ export function HomePage({
 
       {featureFlags.enableAbout ? (
         <SectionShell title={siteConfig.about.heading}>
-          <div className="grid gap-8 lg:grid-cols-[2fr,1fr]">
-            <p className="text-lg text-slate-200">{siteConfig.about.body}</p>
-            <ul className="space-y-4 text-sm text-slate-300">
+          <div className="grid gap-6 lg:grid-cols-[2fr,1fr] lg:gap-8">
+            <p className="text-base text-slate-200 sm:text-lg">{siteConfig.about.body}</p>
+            <ul className="space-y-3 text-sm text-slate-300 sm:space-y-4">
               {siteConfig.about.highlights.map((item) => (
                 <li
                   key={item}
-                  className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4"
+                  className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 sm:p-4"
                 >
-                  <span className="mt-1 h-2 w-2 rounded-full bg-accent" />
+                  <span className="mt-1 h-2 w-2 rounded-full bg-accent flex-shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -340,17 +357,17 @@ export function HomePage({
 
       {featureFlags.enableEvents ? (
         <SectionShell title="Upcoming events">
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
             {siteConfig.events.map((event, index) => (
               <div
                 key={index}
-                className="rounded-2xl border border-white/10 bg-white/5 p-6"
+                className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-6"
               >
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-white">{event.title}</h3>
-                  <span className="text-sm text-slate-400">{event.date}</span>
+                <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="text-base font-semibold text-white sm:text-lg">{event.title}</h3>
+                  <span className="text-xs text-slate-400 sm:text-sm">{event.date}</span>
                 </div>
-                <p className="text-sm text-slate-300">{event.description}</p>
+                <p className="text-xs text-slate-300 sm:text-sm">{event.description}</p>
               </div>
             ))}
           </div>

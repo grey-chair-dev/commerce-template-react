@@ -103,7 +103,7 @@ export function PrivacyTermsPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
         <div className="mx-auto flex w-full max-w-5xl gap-8">
         {/* Sticky Table of Contents Sidebar */}
         <aside className="hidden w-64 flex-shrink-0 lg:block">

@@ -175,7 +175,7 @@ export function SignUpPage({
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                   >
-                    {showPassword ? '👁️' : '👁️‍🗨️'}
+                    {showPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
                 <p className="mt-1 text-xs text-slate-400">

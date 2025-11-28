@@ -143,6 +143,19 @@ function App() {
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
 
+  // Sync auth page state with route
+  useEffect(() => {
+    if (location.pathname === '/login') {
+      setAuthPage('login')
+    } else if (location.pathname === '/signup') {
+      setAuthPage('signup')
+    } else if (location.pathname === '/forgot-password') {
+      setAuthPage('forgot-password')
+    } else {
+      setAuthPage(null)
+    }
+  }, [location.pathname])
+
   // Navigation handlers using useNavigate
   const handleNavigate = {
     toContact: () => navigate('/contact'),
@@ -576,6 +589,50 @@ function App() {
           element={<PrivacyTermsPage {...createPageProps()} />}
         />
 
+        {/* Login Route */}
+        <Route
+          path="/login"
+          element={
+            <LoginPage
+              onSignIn={async (provider) => {
+                await signInWithOAuth(provider)
+                navigate('/')
+              }}
+              onSignUp={() => navigate('/signup')}
+              onForgotPassword={() => navigate('/forgot-password')}
+              onBack={() => navigate('/')}
+              isLoading={isLoading}
+            />
+          }
+        />
+
+        {/* Sign Up Route */}
+        <Route
+          path="/signup"
+          element={
+            <SignUpPage
+              onSignUp={async (provider) => {
+                await signInWithOAuth(provider)
+                navigate('/')
+              }}
+              onSignIn={() => navigate('/login')}
+              onBack={() => navigate('/')}
+              isLoading={isLoading}
+            />
+          }
+        />
+
+        {/* Forgot Password Route */}
+        <Route
+          path="/forgot-password"
+          element={
+            <ForgotPasswordPage
+              onBack={() => navigate('/login')}
+              onSignIn={() => navigate('/login')}
+            />
+          }
+        />
+
         {/* Homepage Route */}
         <Route
           path="/"
@@ -597,7 +654,7 @@ function App() {
                 onProductSelect={(product) => setPdpProduct(product)}
               />
 
-              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 py-10 text-text sm:px-6 lg:px-8">
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
                 {/* Hero Section */}
                 <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/20 via-white/10 to-secondary/10 p-8 lg:p-12 shadow-brand">
                   <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
@@ -1101,8 +1158,8 @@ function App() {
 
       {isCartOpen ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
-          <div className="flex h-full w-full max-w-lg flex-col bg-surface/95 text-white shadow-brand">
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="flex h-full w-full max-w-lg flex-col bg-black backdrop-blur-lg text-white shadow-brand">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 bg-black backdrop-blur-lg">
               <div>
                 <p className="text-lg font-semibold">Shopping bag</p>
                 <p className="text-xs text-slate-400">{cartCount} items</p>
@@ -1115,7 +1172,7 @@ function App() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4 bg-black/80">
               {cartItems.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-white/20 p-6 text-center text-sm text-slate-300">
                   Your bag is empty. Add products to reserve them.
@@ -1186,7 +1243,7 @@ function App() {
               ) : null}
             </div>
 
-            <div className="border-t border-white/10 px-5 py-5">
+            <div className="border-t border-white/10 px-5 py-5 bg-black/80">
               {/* Promo Code Field */}
               <div className="mb-4 space-y-2">
                 <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Promo Code</label>
@@ -1348,8 +1405,8 @@ function App() {
 
       {wishlistFeatureEnabled && isWishlistOpen ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
-          <div className="flex h-full w-full max-w-md flex-col bg-surface/95 text-white shadow-brand">
-            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="flex h-full w-full max-w-md flex-col bg-black backdrop-blur-lg text-white shadow-brand">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 bg-black backdrop-blur-lg">
               <div>
                 <p className="text-lg font-semibold">Wishlist</p>
                 <p className="text-xs text-slate-400">{wishlistCount} saved items</p>
@@ -1369,7 +1426,7 @@ function App() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4 bg-black/80">
               {effectiveWishlist.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-white/20 p-6 text-center text-sm text-slate-300">
                   Save products you love to keep them handy.
@@ -1422,7 +1479,7 @@ function App() {
                 </div>
               )}
             </div>
-            <div className="border-t border-white/10 px-5 py-5 text-xs text-slate-400">
+            <div className="border-t border-white/10 px-5 py-5 text-xs text-slate-400 bg-black/80">
               Share your wishlist or move items to cart whenever you're ready.
             </div>
           </div>

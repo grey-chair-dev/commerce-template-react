@@ -207,7 +207,7 @@ export function ProductDetailView({
                         }`}
                         onClick={onSave}
                       >
-                        {isSaved ? '✓ Saved to wishlist' : 'Save to wishlist'}
+                        {isSaved ? 'Saved to wishlist' : 'Save to wishlist'}
                       </button>
                     )}
                   </>
@@ -223,13 +223,13 @@ export function ProductDetailView({
                 {/* Trust Badges */}
                 <div className="flex flex-wrap items-center gap-3 pt-4 text-xs">
                   <span className="rounded-full bg-white/10 px-3 py-1.5 text-white/80">
-                    ✓ Free returns
+                    Free returns
                   </span>
                   <span className="rounded-full bg-white/10 px-3 py-1.5 text-white/80">
-                    ✓ Secure checkout
+                    Secure checkout
                   </span>
                   <span className="rounded-full bg-white/10 px-3 py-1.5 text-white/80">
-                    ✓ Fast shipping
+                    Fast shipping
                   </span>
                 </div>
               </div>
@@ -260,7 +260,7 @@ export function ProductDetailView({
                   }`}
                   onClick={onSave}
                 >
-                  {isSaved ? '✓' : '♡'}
+                  {isSaved ? 'Saved' : 'Save'}
                 </button>
               )}
               <button

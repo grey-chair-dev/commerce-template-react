@@ -62,10 +62,10 @@ export function UserDashboard({
   const totalOrders = orders.length
 
   const sections: { key: DashboardSection; label: string; icon: string }[] = [
-    { key: 'overview', label: 'Overview', icon: '📊' },
-    { key: 'orders', label: 'Order History', icon: '📦' },
-    { key: 'addresses', label: 'Addresses', icon: '📍' },
-    { key: 'payment', label: 'Payment Methods', icon: '💳' },
+    { key: 'overview', label: 'Overview', icon: '' },
+    { key: 'orders', label: 'Order History', icon: '' },
+    { key: 'addresses', label: 'Addresses', icon: '' },
+    { key: 'payment', label: 'Payment Methods', icon: '' },
   ]
 
   return (

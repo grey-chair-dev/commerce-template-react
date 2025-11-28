@@ -32,11 +32,22 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Prevent horizontal scroll on mobile */
+  overflow-x: hidden;
+  /* Better font rendering on mobile */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--color-surface);
   color: var(--color-text);
+  /* Prevent horizontal scroll */
+  overflow-x: hidden;
+  /* Better touch scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
 #root {

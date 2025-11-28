@@ -100,16 +100,10 @@ export function AboutUsPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">About Us</h1>
-          <button
-            onClick={() => navigate('/')}
-            className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/80 hover:bg-white/10 hover:text-white"
-          >
-            Close
-          </button>
         </div>
 
         {/* Mission Section */}
@@ -140,7 +134,6 @@ export function AboutUsPage({
             <div className="aspect-video w-full overflow-hidden rounded-2xl bg-white/5">
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">
-                  <div className="mb-4 text-6xl">🎬</div>
                   <p className="text-sm text-slate-400">
                     Video coming soon: Learn about our journey and values
                   </p>
@@ -181,21 +174,18 @@ export function AboutUsPage({
             <h2 className="mb-6 text-2xl font-semibold text-white">Our Values</h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-                <div className="mb-3 text-3xl">🌱</div>
                 <h3 className="mb-2 text-lg font-semibold text-white">Sustainability</h3>
                 <p className="text-sm text-slate-300">
                   We prioritize eco-friendly practices and support local, sustainable production.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-                <div className="mb-3 text-3xl">🤝</div>
                 <h3 className="mb-2 text-lg font-semibold text-white">Community First</h3>
                 <p className="text-sm text-slate-300">
                   Building strong relationships with local makers and our neighborhood.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-                <div className="mb-3 text-3xl">✨</div>
                 <h3 className="mb-2 text-lg font-semibold text-white">Authenticity</h3>
                 <p className="text-sm text-slate-300">
                   Every product tells a story. We celebrate genuine craftsmanship and quality.

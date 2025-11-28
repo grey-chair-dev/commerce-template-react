@@ -67,7 +67,9 @@ export function Layout({
         onSearch={onSearch}
         onProductSelect={onProductSelect}
       />
-      {children}
+      <div className="pt-24 sm:pt-32 md:pt-44">
+        {children}
+      </div>
       <Footer
         orderTrackingEnabled={orderTrackingEnabled}
         onTrackOrder={onTrackOrder}

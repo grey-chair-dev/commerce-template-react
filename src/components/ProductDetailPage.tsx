@@ -160,11 +160,11 @@ export function ProductDetailPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pt-24 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-32 sm:pb-10 md:pt-44 lg:px-8">
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition self-start"
+          className="flex items-center gap-2 text-sm text-slate-300 hover:text-white transition self-start min-h-[44px]"
         >
           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -173,7 +173,7 @@ export function ProductDetailPage({
         </button>
 
         {/* Product Header Section */}
-        <div className="grid gap-12 lg:grid-cols-[1.5fr,1fr]">
+        <div className="grid gap-8 lg:grid-cols-[1.5fr,1fr] lg:gap-12">
           {/* Image Gallery */}
           <div className="space-y-4">
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 aspect-square">
@@ -188,12 +188,12 @@ export function ProductDetailPage({
                 </div>
               )}
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 sm:gap-3">
               {gallery.map((image, index) => (
                 <button
                   key={image + index}
                   onClick={() => setSelectedImage(index)}
-                  className={`flex-shrink-0 overflow-hidden rounded-2xl border-2 transition ${
+                  className={`flex-shrink-0 overflow-hidden rounded-xl border-2 transition min-h-[60px] min-w-[60px] sm:rounded-2xl sm:min-h-[80px] sm:min-w-[80px] ${
                     selectedImage === index
                       ? 'border-primary scale-105'
                       : 'border-white/10 hover:border-white/30'
@@ -202,7 +202,7 @@ export function ProductDetailPage({
                   <img
                     src={image}
                     alt={`${product.name} view ${index + 1}`}
-                    className="h-20 w-20 object-cover"
+                    className="h-full w-full object-cover"
                   />
                 </button>
               ))}
@@ -222,7 +222,7 @@ export function ProductDetailPage({
                   {product.category}
                 </span>
               </div>
-              <h1 className="text-4xl font-bold text-white leading-tight mb-3">{product.name}</h1>
+              <h1 className="text-2xl font-bold text-white leading-tight mb-3 sm:text-3xl lg:text-4xl">{product.name}</h1>
               <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-2">
                   <StarRating rating={product.rating} />
@@ -233,9 +233,9 @@ export function ProductDetailPage({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:rounded-3xl sm:p-6">
               <div className="flex items-baseline justify-between mb-4">
-                <span className="text-3xl font-bold text-white">
+                <span className="text-2xl font-bold text-white sm:text-3xl">
                   {moneyFormatter.format(product.price)}
                 </span>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
@@ -244,7 +244,7 @@ export function ProductDetailPage({
               </div>
 
               <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 sm:rounded-2xl sm:p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-white">Availability</span>
                     <span
@@ -276,22 +276,22 @@ export function ProductDetailPage({
                 </div>
 
                 {product.stockCount > 0 && (
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
                     <label className="text-sm font-semibold text-white">Quantity:</label>
                     <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5">
                       <button
                         onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                        className="px-4 py-2 text-white/80 hover:text-white transition"
+                        className="px-4 py-3 text-white/80 hover:text-white transition min-h-[44px] min-w-[44px]"
                         disabled={quantity <= 1}
                       >
                         −
                       </button>
-                      <span className="px-4 py-2 text-white font-semibold min-w-[3rem] text-center">
+                      <span className="px-4 py-3 text-white font-semibold min-w-[3rem] text-center">
                         {quantity}
                       </span>
                       <button
                         onClick={() => setQuantity((q) => Math.min(product.stockCount, q + 1))}
-                        className="px-4 py-2 text-white/80 hover:text-white transition"
+                        className="px-4 py-3 text-white/80 hover:text-white transition min-h-[44px] min-w-[44px]"
                         disabled={quantity >= product.stockCount}
                       >
                         +
@@ -304,27 +304,27 @@ export function ProductDetailPage({
                   {product.stockCount > 0 ? (
                     <>
                       <button
-                        className="w-full rounded-full bg-primary px-6 py-4 text-base font-semibold text-white shadow-brand hover:bg-primary/80 transition"
+                        className="w-full rounded-full bg-primary px-6 py-3.5 text-sm font-semibold text-white shadow-brand hover:bg-primary/80 transition min-h-[44px] sm:py-4 sm:text-base"
                         onClick={handleAddToCart}
                       >
                         Add {quantity > 1 ? `${quantity} to` : 'to'} cart
                       </button>
                       {onToggleWishlist && (
                         <button
-                          className={`w-full rounded-full border-2 px-6 py-4 text-base font-semibold transition ${
+                          className={`w-full rounded-full border-2 px-6 py-3.5 text-sm font-semibold transition min-h-[44px] sm:py-4 sm:text-base ${
                             isSaved
                               ? 'border-secondary bg-secondary/20 text-secondary'
                               : 'border-white/20 text-white/80 hover:border-white/40 hover:text-white'
                           }`}
                           onClick={() => onToggleWishlist(product)}
                         >
-                          {isSaved ? '✓ Saved to wishlist' : 'Save to wishlist'}
+                          {isSaved ? 'Saved to wishlist' : 'Save to wishlist'}
                         </button>
                       )}
                     </>
                   ) : (
                     <button
-                      className="w-full rounded-full border border-white/20 px-6 py-4 text-base font-semibold text-white/50 cursor-not-allowed"
+                      className="w-full rounded-full border border-white/20 px-6 py-3.5 text-sm font-semibold text-white/50 cursor-not-allowed min-h-[44px] sm:py-4 sm:text-base"
                       disabled
                     >
                       Out of stock
@@ -332,15 +332,15 @@ export function ProductDetailPage({
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 pt-4 text-xs">
-                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-white/80">
-                    ✓ Free returns
+                <div className="flex flex-wrap items-center gap-2 pt-4 text-xs sm:gap-3">
+                  <span className="rounded-full bg-white/10 px-2.5 py-1.5 text-white/80 sm:px-3">
+                    Free returns
                   </span>
-                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-white/80">
-                    ✓ Secure checkout
+                  <span className="rounded-full bg-white/10 px-2.5 py-1.5 text-white/80 sm:px-3">
+                    Secure checkout
                   </span>
-                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-white/80">
-                    ✓ Fast shipping
+                  <span className="rounded-full bg-white/10 px-2.5 py-1.5 text-white/80 sm:px-3">
+                    Fast shipping
                   </span>
                 </div>
               </div>
@@ -349,12 +349,12 @@ export function ProductDetailPage({
         </div>
 
         {/* Tabs Section */}
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Tab Navigation */}
-          <div className="flex gap-2 border-b border-white/10">
+          <div className="flex gap-1 overflow-x-auto border-b border-white/10 sm:gap-2 scrollbar-hide">
             <button
               onClick={() => setActiveTab('description')}
-              className={`px-6 py-3 text-sm font-semibold transition border-b-2 ${
+              className={`px-4 py-3 text-xs font-semibold transition border-b-2 whitespace-nowrap min-h-[44px] sm:px-6 sm:text-sm ${
                 activeTab === 'description'
                   ? 'border-primary text-white'
                   : 'border-transparent text-slate-400 hover:text-white'
@@ -365,7 +365,7 @@ export function ProductDetailPage({
             {enableSpecifications && (
               <button
                 onClick={() => setActiveTab('specifications')}
-                className={`px-6 py-3 text-sm font-semibold transition border-b-2 ${
+                className={`px-4 py-3 text-xs font-semibold transition border-b-2 whitespace-nowrap min-h-[44px] sm:px-6 sm:text-sm ${
                   activeTab === 'specifications'
                     ? 'border-primary text-white'
                     : 'border-transparent text-slate-400 hover:text-white'
@@ -377,7 +377,7 @@ export function ProductDetailPage({
             {enableReviews && (
               <button
                 onClick={() => setActiveTab('reviews')}
-                className={`px-6 py-3 text-sm font-semibold transition border-b-2 ${
+                className={`px-4 py-3 text-xs font-semibold transition border-b-2 whitespace-nowrap min-h-[44px] sm:px-6 sm:text-sm ${
                   activeTab === 'reviews'
                     ? 'border-primary text-white'
                     : 'border-transparent text-slate-400 hover:text-white'
@@ -389,11 +389,11 @@ export function ProductDetailPage({
           </div>
 
           {/* Tab Content */}
-          <div className="min-h-[400px]">
+          <div className="min-h-[300px] sm:min-h-[400px]">
             {activeTab === 'description' && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-semibold text-white">Product Description</h2>
-                <p className="text-lg text-slate-200 leading-relaxed">{product.description}</p>
+              <div className="space-y-3 sm:space-y-4">
+                <h2 className="text-xl font-semibold text-white sm:text-2xl">Product Description</h2>
+                <p className="text-base text-slate-200 leading-relaxed sm:text-lg">{product.description}</p>
               </div>
             )}
 

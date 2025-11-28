@@ -70,7 +70,7 @@ export function ShippingReturnsPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
           {/* Header */}
           <div className="mb-8 flex items-center justify-between">
@@ -263,19 +263,19 @@ export function ShippingReturnsPage({
                 <h3 className="mb-3 text-lg font-semibold">Return Eligibility</h3>
                 <ul className="space-y-2 text-sm text-slate-300">
                   <li className="flex items-start gap-2">
-                    <span className="mt-1 text-accent">✓</span>
+                    <span className="mt-1 h-2 w-2 rounded-full bg-accent flex-shrink-0" />
                     <span>Items must be unused and in original packaging</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-1 text-accent">✓</span>
+                    <span className="mt-1 h-2 w-2 rounded-full bg-accent flex-shrink-0" />
                     <span>All tags and labels must be attached</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-1 text-accent">✓</span>
+                    <span className="mt-1 h-2 w-2 rounded-full bg-accent flex-shrink-0" />
                     <span>Return must be initiated within 30 days</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="mt-1 text-accent">✓</span>
+                    <span className="mt-1 h-2 w-2 rounded-full bg-accent flex-shrink-0" />
                     <span>Original receipt or order confirmation required</span>
                   </li>
                 </ul>

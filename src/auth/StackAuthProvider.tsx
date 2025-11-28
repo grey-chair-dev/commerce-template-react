@@ -69,9 +69,12 @@ export const StackAuthProvider = ({ children }: { children: ReactNode }) => {
 
   const authClient = useMemo(() => {
     if (!authUrl) {
-      console.warn(
-        '[StackAuthProvider] Missing VITE_NEON_AUTH_URL. Falling back to local session.',
-      )
+      // Only warn in development mode to reduce console noise
+      if (import.meta.env.DEV) {
+        console.warn(
+          '[StackAuthProvider] Missing VITE_NEON_AUTH_URL. Falling back to local session.',
+        )
+      }
       return null
     }
 
@@ -139,7 +142,9 @@ export const StackAuthProvider = ({ children }: { children: ReactNode }) => {
   const handleSignIn = useCallback(
     async (provider = 'google') => {
       if (!authClient) {
-        console.warn('[StackAuthProvider] signInWithOAuth skipped; no auth client')
+        if (import.meta.env.DEV) {
+          console.warn('[StackAuthProvider] signInWithOAuth skipped; no auth client')
+        }
         return
       }
 

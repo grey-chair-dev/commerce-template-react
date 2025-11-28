@@ -67,7 +67,7 @@ export function NotFoundPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
+      <main className="flex flex-1 flex-col items-center justify-center px-4 pt-24 pb-16 text-center sm:pt-32 md:pt-44">
         <div className="max-w-2xl space-y-8">
         {/* 404 Heading */}
         <div className="space-y-4">

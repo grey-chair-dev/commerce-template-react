@@ -162,7 +162,7 @@ export function LoginPage({
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                   >
-                    {showPassword ? '👁️' : '👁️‍🗨️'}
+                    {showPassword ? 'Hide' : 'Show'}
                   </button>
                 </div>
               </div>
@@ -193,19 +193,19 @@ export function LoginPage({
               <p className="mb-3 text-sm font-semibold text-white">Benefits of signing in:</p>
               <ul className="space-y-2 text-xs text-slate-300">
                 <li className="flex items-start gap-2">
-                  <span className="mt-1 text-primary">✓</span>
+                  <span className="mt-1 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
                   <span>Faster checkout with saved addresses</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="mt-1 text-primary">✓</span>
+                  <span className="mt-1 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
                   <span>Access to order history and tracking</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="mt-1 text-primary">✓</span>
+                  <span className="mt-1 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
                   <span>Save items to your wishlist</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="mt-1 text-primary">✓</span>
+                  <span className="mt-1 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
                   <span>Personalized recommendations</span>
                 </li>
               </ul>

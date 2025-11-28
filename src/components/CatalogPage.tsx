@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
+import { siteConfig } from '../config'
 import { Header } from './Header'
 import { Footer } from './Footer'
 
@@ -138,23 +139,39 @@ export function CatalogPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pt-24 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-32 sm:pb-10 md:pt-44 lg:px-8">
         {/* Page Header */}
-        <div className="space-y-4">
-          <h1 className="text-4xl font-semibold leading-tight text-text sm:text-5xl">
+        <div className="space-y-3 sm:space-y-4">
+          <h1 className="text-2xl font-semibold leading-tight text-text sm:text-4xl lg:text-5xl">
             Product Catalog
           </h1>
-          <p className="max-w-2xl text-lg text-slate-200">
+          <p className="max-w-2xl text-base text-slate-200 sm:text-lg">
             Browse our complete selection of products. Filter by category or sort to find exactly
             what you're looking for.
           </p>
         </div>
 
-        {/* Filters and Sort */}
-        <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 md:flex-row md:items-center md:justify-between">
+        {/* Mobile: Hours and CTA */}
+        <div className="sm:hidden space-y-3 mb-4">
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-[0.2em]">Store Hours</p>
+              <p className="text-sm font-semibold text-white mt-1">{siteConfig.contact.hours}</p>
+            </div>
+            <button
+              onClick={() => navigate('/contact')}
+              className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-primary/80 min-h-[44px] whitespace-nowrap"
+            >
+              Contact Us
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop: Filters and Sort */}
+        <div className="hidden sm:flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 md:rounded-3xl md:p-6 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             <button
-              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition min-h-[44px] sm:px-4 sm:text-sm ${
                 showSaleOnly
                   ? 'border-secondary bg-secondary/20 text-white'
                   : 'border-white/10 text-slate-300 hover:border-white/30'
@@ -164,12 +181,12 @@ export function CatalogPage({
                 setVisibleCount(BATCH_SIZE)
               }}
             >
-              {showSaleOnly ? '✓ Sale Items' : 'Sale Items'}
+              {showSaleOnly ? 'Sale Items' : 'Sale Items'}
             </button>
             {categories.map((category) => (
               <button
                 key={category}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
+                className={`rounded-full border px-3 py-2 text-xs transition min-h-[44px] sm:px-4 sm:text-sm ${
                   category === selectedCategory
                     ? 'border-primary bg-primary/20 text-white'
                     : 'border-white/10 text-slate-300 hover:border-white/30'
@@ -197,7 +214,7 @@ export function CatalogPage({
                 setSortBy(event.target.value as typeof sortBy)
                 setVisibleCount(BATCH_SIZE)
               }}
-              className="rounded-full border border-white/20 bg-transparent px-4 py-2 text-sm text-white focus:outline-none"
+              className="rounded-full border border-white/20 bg-transparent px-3 py-2 text-sm text-white focus:outline-none min-h-[44px] sm:px-4"
             >
               <option value="featured">Inventory (desc)</option>
               <option value="priceAsc">Price · low → high</option>
@@ -209,7 +226,7 @@ export function CatalogPage({
         {/* Product Grid */}
         {displayProducts.length > 0 ? (
           <>
-            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 xl:grid-cols-3">
               {displayProducts.map((product) => (
                 <article
                   key={product.id}
@@ -232,13 +249,13 @@ export function CatalogPage({
                       {product.category}
                     </span>
                   </div>
-                  <div className="flex flex-1 flex-col gap-3 p-5">
+                  <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-lg font-semibold text-white">{product.name}</p>
-                        <p className="text-sm text-slate-400">{product.description}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-base font-semibold text-white sm:text-lg truncate">{product.name}</p>
+                        <p className="text-xs text-slate-400 sm:text-sm line-clamp-2">{product.description}</p>
                       </div>
-                      <span className="text-base font-semibold text-secondary">
+                      <span className="text-sm font-semibold text-secondary flex-shrink-0 sm:text-base">
                         {moneyFormatter.format(product.price)}
                       </span>
                     </div>
@@ -262,9 +279,9 @@ export function CatalogPage({
                         }}
                       />
                     </div>
-                    <div className="mt-auto flex flex-wrap gap-2">
+                    <div className="mt-auto flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       <button
-                        className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
+                        className="flex-1 rounded-full border border-white/20 px-3 py-2.5 text-xs text-white/80 hover:border-white/40 min-h-[44px] sm:px-4"
                         onClick={(e) => {
                           e.stopPropagation()
                           onQuickView(product)
@@ -273,7 +290,7 @@ export function CatalogPage({
                         Quick view
                       </button>
                       <button
-                        className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
+                        className="flex-1 rounded-full border border-white/20 px-3 py-2.5 text-xs text-white/80 hover:border-white/40 min-h-[44px] sm:px-4"
                         onClick={(e) => {
                           e.stopPropagation()
                           onViewDetails(product)
@@ -283,7 +300,7 @@ export function CatalogPage({
                       </button>
                       {wishlistFeatureEnabled ? (
                         <button
-                          className={`rounded-full border px-4 py-2 text-xs font-semibold ${
+                          className={`rounded-full border px-3 py-2.5 text-xs font-semibold min-h-[44px] sm:px-4 ${
                             effectiveWishlist.some((item: Product) => item.id === product.id)
                               ? 'border-secondary text-secondary'
                               : 'border-white/20 text-white/80 hover:border-white/40'
@@ -299,7 +316,7 @@ export function CatalogPage({
                         </button>
                       ) : null}
                       <button
-                        className="w-full rounded-full bg-primary/80 px-4 py-2 text-xs font-semibold text-white shadow-brand"
+                        className="w-full rounded-full bg-primary/80 px-4 py-2.5 text-xs font-semibold text-white shadow-brand min-h-[44px]"
                         onClick={(e) => {
                           e.stopPropagation()
                           onAddToCart(product)
