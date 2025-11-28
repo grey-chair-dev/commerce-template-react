@@ -12,7 +12,7 @@
  * - In an Express backend: use in your API endpoints
  */
 
-import { Client, Environment } from 'square'
+import { SquareClient, SquareEnvironment } from 'square'
 
 export type SquareConfig = {
   accessToken: string
@@ -37,9 +37,9 @@ export type SquareProduct = {
  * Initialize Square client
  */
 export function createSquareClient(config: SquareConfig) {
-  return new Client({
+  return new SquareClient({
     accessToken: config.accessToken,
-    environment: config.environment === 'production' ? Environment.Production : Environment.Sandbox,
+    environment: config.environment === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
   })
 }
 
@@ -47,14 +47,14 @@ export function createSquareClient(config: SquareConfig) {
  * Fetch all catalog items from Square
  */
 export async function fetchSquareCatalogItems(
-  client: Client,
+  client: SquareClient,
   locationId?: string,
 ): Promise<any[]> {
   try {
-    const catalogApi = client.catalogApi
+    const catalog = client.catalog
     
     // List all catalog objects
-    const response = await catalogApi.listCatalog(undefined, 'ITEM')
+    const response = await catalog.listCatalog({ types: ['ITEM'] })
     
     if (response.result?.objects) {
       return response.result.objects.filter((obj: any) => obj.type === 'ITEM')
@@ -71,32 +71,43 @@ export async function fetchSquareCatalogItems(
  * Fetch inventory counts for catalog items
  */
 export async function fetchSquareInventory(
-  client: Client,
+  client: SquareClient,
   catalogObjectIds: string[],
   locationId: string,
 ): Promise<Map<string, number>> {
   try {
-    const inventoryApi = client.inventoryApi
+    const inventory = client.inventory
     
     const inventoryMap = new Map<string, number>()
     
-    // Fetch inventory for each catalog item
-    for (const catalogObjectId of catalogObjectIds) {
-      try {
-        const response = await inventoryApi.retrieveInventoryCount(catalogObjectId, locationId)
-        
-        if (response.result?.counts && response.result.counts.length > 0) {
-          // Sum up all inventory counts for this item
-          const totalCount = response.result.counts.reduce(
-            (sum: number, count: any) => sum + (count.quantity || 0),
-            0,
-          )
-          inventoryMap.set(catalogObjectId, totalCount)
-        } else {
+    // Fetch inventory counts for all items at once
+    try {
+      const response = await inventory.batchRetrieveInventoryCounts({
+        catalogObjectIds,
+        locationIds: [locationId],
+      })
+      
+      if (response.result?.counts) {
+        // Group counts by catalog object ID
+        for (const count of response.result.counts) {
+          const catalogObjectId = count.catalogObjectId
+          if (catalogObjectId) {
+            const currentCount = inventoryMap.get(catalogObjectId) || 0
+            inventoryMap.set(catalogObjectId, currentCount + (count.quantity || 0))
+          }
+        }
+      }
+      
+      // Set 0 for items that don't have inventory counts
+      for (const catalogObjectId of catalogObjectIds) {
+        if (!inventoryMap.has(catalogObjectId)) {
           inventoryMap.set(catalogObjectId, 0)
         }
-      } catch (error) {
-        console.warn(`[SquareAdapter] Error fetching inventory for ${catalogObjectId}:`, error)
+      }
+    } catch (error) {
+      console.warn('[SquareAdapter] Error fetching inventory:', error)
+      // Set all to 0 if batch fetch fails
+      for (const catalogObjectId of catalogObjectIds) {
         inventoryMap.set(catalogObjectId, 0)
       }
     }
@@ -208,8 +219,8 @@ export async function fetchSquareProductById(
   }
   
   try {
-    const catalogApi = client.catalogApi
-    const response = await catalogApi.retrieveCatalogObject(productId, true)
+    const catalog = client.catalog
+    const response = await catalog.retrieveCatalogObject(productId, { includeRelatedObjects: true })
     
     if (response.result?.object) {
       const inventoryMap = await fetchSquareInventory(client, [productId], locationId)

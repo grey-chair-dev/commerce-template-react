@@ -12,7 +12,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { fetchSquareProducts, type SquareConfig } from '../../src/services/squareAdapter'
+import { fetchSquareProducts, type SquareConfig } from '../../src/services/squareAdapter.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow GET requests
