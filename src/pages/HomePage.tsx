@@ -102,7 +102,7 @@ export function HomePage({
   const effectiveWishlist = wishlistFeatureEnabled ? wishlist : []
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 text-text sm:gap-8 sm:px-6 sm:py-10 lg:px-8">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pt-32 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-44 sm:pb-10 md:pt-56 lg:pt-60 lg:px-8">
       <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-4 shadow-brand sm:rounded-3xl sm:p-6 lg:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-3 sm:space-y-4">
@@ -167,7 +167,7 @@ export function HomePage({
       </section>
 
       <SectionShell
-        title="Product catalog"
+        title="Shop Vinyl Records"
         description="Backed by the mandated onSnapshot adapter subscribed to /artifacts/{appId}/public/data/products."
       >
         {/* Mobile: Hours and CTA */}
@@ -178,7 +178,7 @@ export function HomePage({
               <p className="text-sm font-semibold text-white mt-1">{siteConfig.contact.hours}</p>
             </div>
             <button
-              onClick={() => navigate('/catalog')}
+              onClick={() => navigate('/shop')}
               className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-primary/80 min-h-[44px] whitespace-nowrap"
             >
               {siteConfig.hero.primaryCta}

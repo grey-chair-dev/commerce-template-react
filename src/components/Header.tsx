@@ -86,7 +86,13 @@ export function Header({
   }
 
   const location = useLocation()
-  const isActive = (path: string) => location.pathname === path
+  const isActive = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/'
+    }
+    // For sub-routes like /events/book, /events/past, highlight the parent
+    return location.pathname === path || location.pathname.startsWith(path + '/')
+  }
 
   return (
     <>
@@ -354,13 +360,31 @@ export function Header({
                   Home
                 </Link>
                 <Link
-                  to="/catalog"
+                  to="/shop"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
-                    isActive('/catalog') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                    isActive('/shop') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
                 >
-                  Catalog
+                  Shop Records
+                </Link>
+                <Link
+                  to="/events"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
+                    isActive('/events') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  Events
+                </Link>
+                <Link
+                  to="/editorial"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
+                    isActive('/editorial') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  Editorial
                 </Link>
                 <Link
                   to="/about"
@@ -433,14 +457,34 @@ export function Header({
             Home
           </Link>
           <Link
-            to="/catalog"
+            to="/shop"
               className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
-                isActive('/catalog') 
+                isActive('/shop') 
                   ? 'text-primary bg-primary/10 font-semibold' 
                   : 'text-slate-300 hover:text-white hover:bg-white/5'
             }`}
           >
-            Catalog
+            Shop Records
+          </Link>
+          <Link
+            to="/events"
+              className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
+                isActive('/events') 
+                  ? 'text-primary bg-primary/10 font-semibold' 
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Events
+          </Link>
+          <Link
+            to="/editorial"
+              className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
+                isActive('/editorial') 
+                  ? 'text-primary bg-primary/10 font-semibold' 
+                  : 'text-slate-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Editorial
           </Link>
           <Link
             to="/about"

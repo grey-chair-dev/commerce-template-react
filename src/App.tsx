@@ -32,11 +32,15 @@ import { ComingSoonPage } from './components/ComingSoonPage'
 import { AboutUsPage } from './components/AboutUsPage'
 import { CatalogPage } from './components/CatalogPage'
 import { ClearancePage } from './components/ClearancePage'
+import { EventsPage } from './components/EventsPage'
+import { EditorialPage } from './components/EditorialPage'
+import { NewArrivalsPage } from './components/NewArrivalsPage'
 import { Header } from './components/Header'
 import { Footer } from './components/Footer'
 import { ClientLoginPage } from './components/ClientLoginPage'
 import { isClientAuthRequired, verifyClientSession } from './services/clientAuth'
 import { moneyFormatter } from './formatters'
+import { Navigate } from 'react-router-dom'
 
 export type CartItem = Product & { quantity: number }
 
@@ -145,6 +149,8 @@ function App() {
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
   const [isClientAuthenticated, setIsClientAuthenticated] = useState(false)
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(true)
 
   // Check client authentication on mount
   useEffect(() => {
@@ -172,11 +178,28 @@ function App() {
     }
   }, [location.pathname])
 
+  // Clear ProductDetailView modal when navigating to ProductDetailPage route
+  useEffect(() => {
+    if (location.pathname.startsWith('/product/')) {
+      setPdpProduct(null)
+      // Scroll to top when navigating to product page
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [location.pathname, setPdpProduct])
+
+  // Scroll to top when navigating to shop page
+  useEffect(() => {
+    if (location.pathname === '/shop' || location.pathname.startsWith('/shop/')) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [location.pathname])
+
+
   // Navigation handlers using useNavigate
   const handleNavigate = {
     toContact: () => navigate('/contact'),
     toAbout: () => navigate('/about'),
-    toCatalog: () => navigate('/catalog'),
+    toCatalog: () => navigate('/shop'),
     toShippingReturns: () => navigate('/shipping-returns'),
     toPrivacy: () => navigate('/privacy'),
     toTerms: () => navigate('/terms'),
@@ -378,6 +401,15 @@ function App() {
       .slice(0, 8)
   }, [products])
 
+  // Update scroll state when newArrivals changes
+  useEffect(() => {
+    if (newArrivalsScrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = newArrivalsScrollRef.current
+      setCanScrollLeft(scrollLeft > 0)
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10)
+    }
+  }, [newArrivals])
+
   // Featured Categories - unique categories from products
   const featuredCategories = useMemo(() => {
     const categoryCounts = new Map<string, number>()
@@ -422,7 +454,12 @@ function App() {
     onCart: () => setCartOpen(true),
     onWishlist: () => setWishlistOpen(true),
     onSearch: () => setSearchOpen(true),
-    onProductSelect: (product: Product) => setPdpProduct(product),
+    onProductSelect: (product: Product) => {
+      // Don't set pdpProduct if we're navigating to product route
+      if (!location.pathname.startsWith('/product/')) {
+        setPdpProduct(product)
+      }
+    },
     onTrackOrder: handleNavigate.toTrackOrder,
     onContactUs: handleNavigate.toContact,
     onAboutUs: handleNavigate.toAbout,
@@ -555,32 +592,97 @@ function App() {
           element={<AboutUsPage {...createPageProps()} />}
         />
 
-        {/* Catalog/Menu Route */}
+        {/* Shop Route */}
         <Route
-          path="/catalog"
+          path="/shop"
           element={
             <CatalogPage
               {...createPageProps()}
               onQuickView={(product) => setQuickViewProduct(product)}
-              onViewDetails={(product) => navigate(`/product/${product.id}`)}
+              onViewDetails={(product) => {
+                setPdpProduct(null)
+                navigate(`/product/${product.id}`)
+              }}
               onToggleWishlist={toggleWishlist}
               onAddToCart={addToCart}
             />
           }
         />
 
-        {/* Clearance/Sale Route */}
+        {/* Shop New Arrivals Route */}
         <Route
-          path="/clearance"
+          path="/shop/new-arrivals"
           element={
-            <ClearancePage
+            <NewArrivalsPage
               {...createPageProps()}
               onQuickView={(product) => setQuickViewProduct(product)}
-              onViewDetails={(product) => navigate(`/product/${product.id}`)}
+              onViewDetails={(product) => {
+                setPdpProduct(null)
+                navigate(`/product/${product.id}`)
+              }}
               onToggleWishlist={toggleWishlist}
               onAddToCart={addToCart}
             />
           }
+        />
+
+        {/* Shop Clearance Route */}
+        <Route
+          path="/shop/clearance"
+          element={
+            <ClearancePage
+              {...createPageProps()}
+              onQuickView={(product) => setQuickViewProduct(product)}
+              onViewDetails={(product) => {
+                setPdpProduct(null)
+                navigate(`/product/${product.id}`)
+              }}
+              onToggleWishlist={toggleWishlist}
+              onAddToCart={addToCart}
+            />
+          }
+        />
+
+        {/* Catalog route (legacy - redirects to /shop) */}
+        <Route
+          path="/catalog"
+          element={<Navigate to="/shop" replace />}
+        />
+
+        {/* Catalog Clearance Route (legacy - redirects to /shop/clearance) */}
+        <Route
+          path="/catalog/clearance"
+          element={<Navigate to="/shop/clearance" replace />}
+        />
+
+        {/* Clearance/Sale Route (legacy - redirects to /shop/clearance) */}
+        <Route
+          path="/clearance"
+          element={<Navigate to="/shop/clearance" replace />}
+        />
+
+        {/* Events Route */}
+        <Route
+          path="/events"
+          element={<EventsPage {...createPageProps()} />}
+        />
+
+        {/* Events Book Route */}
+        <Route
+          path="/events/book"
+          element={<EventsPage {...createPageProps()} />}
+        />
+
+        {/* Events Past Route */}
+        <Route
+          path="/events/past"
+          element={<EventsPage {...createPageProps()} />}
+        />
+
+        {/* Editorial Route */}
+        <Route
+          path="/editorial"
+          element={<EditorialPage {...createPageProps()} />}
         />
 
         {/* Product Detail Page Route */}
@@ -679,7 +781,7 @@ function App() {
                 onProductSelect={(product) => setPdpProduct(product)}
               />
 
-              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-32 pb-10 text-text sm:px-6 sm:pt-44 md:pt-56 lg:pt-60 lg:px-8">
                 {/* Hero Section */}
                 <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/20 via-white/10 to-secondary/10 p-8 lg:p-12 shadow-brand">
                   <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
@@ -695,7 +797,7 @@ function App() {
                       </div>
                       <div className="flex flex-wrap gap-3">
                         <button 
-                          onClick={() => navigate('/catalog')}
+                          onClick={() => navigate('/shop')}
                           className="rounded-full bg-primary px-8 py-3 text-base font-semibold text-white shadow-brand transition hover:bg-primary/80 hover:scale-105"
                         >
                           {siteConfig.hero.primaryCta}
@@ -765,7 +867,7 @@ function App() {
                           <button
                             key={category}
                             onClick={() => {
-                              navigate(`/catalog?category=${encodeURIComponent(category)}`)
+                              navigate(`/shop?category=${encodeURIComponent(category)}`)
                             }}
                             className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-6 text-left transition hover:border-primary/60 hover:scale-[1.02]"
                           >
@@ -803,34 +905,51 @@ function App() {
                 ) : (
                   <div className="relative">
                     {/* Left Arrow */}
-                    <button
-                      onClick={() => {
-                        if (newArrivalsScrollRef.current) {
-                          newArrivalsScrollRef.current.scrollBy({ left: -320, behavior: 'smooth' })
-                        }
-                      }}
-                      className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-surface/90 p-2 text-white shadow-brand backdrop-blur-sm transition hover:bg-surface hover:scale-110"
-                      aria-label="Scroll left"
-                    >
-                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
+                    {canScrollLeft && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (newArrivalsScrollRef.current) {
+                            newArrivalsScrollRef.current.scrollBy({ left: -320, behavior: 'smooth' })
+                          }
+                        }}
+                        className="absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 backdrop-blur-sm p-3 text-white transition-opacity hover:bg-black/70"
+                        aria-label="Scroll left"
+                      >
+                        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                    )}
                     {/* Right Arrow */}
-                    <button
-                      onClick={() => {
+                    {canScrollRight && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (newArrivalsScrollRef.current) {
+                            newArrivalsScrollRef.current.scrollBy({ left: 320, behavior: 'smooth' })
+                          }
+                        }}
+                        className="absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 backdrop-blur-sm p-3 text-white transition-opacity hover:bg-black/70"
+                        aria-label="Scroll right"
+                      >
+                        <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    )}
+                    <div 
+                      ref={newArrivalsScrollRef} 
+                      className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide"
+                      onScroll={() => {
+                        // Update arrow visibility based on scroll position
                         if (newArrivalsScrollRef.current) {
-                          newArrivalsScrollRef.current.scrollBy({ left: 320, behavior: 'smooth' })
+                          const { scrollLeft, scrollWidth, clientWidth } = newArrivalsScrollRef.current
+                          setCanScrollLeft(scrollLeft > 0)
+                          setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10)
                         }
                       }}
-                      className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-surface/90 p-2 text-white shadow-brand backdrop-blur-sm transition hover:bg-surface hover:scale-110"
-                      aria-label="Scroll right"
                     >
-                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                    <div ref={newArrivalsScrollRef} className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide">
                       {newArrivals.map((product) => (
                         <article
                           key={product.id}
@@ -913,7 +1032,7 @@ function App() {
                           <p className="text-sm font-semibold text-white">See More</p>
                           <p className="text-xs text-slate-400">Browse all new arrivals</p>
                           <button
-                            onClick={() => navigate('/catalog')}
+                            onClick={() => navigate('/shop')}
                             className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white shadow-brand hover:bg-primary/80"
                           >
                             View Catalog
@@ -1045,13 +1164,15 @@ function App() {
                   </div>
                 </SectionShell>
 
-              <button
-                className="fixed bottom-6 right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary/80 md:hidden"
-                onClick={handleOpenFilterDrawer}
-              >
-                <span className="h-2 w-2 rounded-full bg-white" />
-                Filters
-              </button>
+              {location.pathname !== '/' && (
+                <button
+                  className="fixed bottom-6 right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary/80 md:hidden"
+                  onClick={handleOpenFilterDrawer}
+                >
+                  <span className="h-2 w-2 rounded-full bg-white" />
+                  Filters
+                </button>
+              )}
 
               </main>
 
@@ -1511,7 +1632,7 @@ function App() {
         </div>
       ) : null}
 
-      {pdpProduct ? (
+      {pdpProduct && !location.pathname.startsWith('/product/') ? (
         <ProductDetailView
           product={pdpProduct}
           onClose={() => setPdpProduct(null)}

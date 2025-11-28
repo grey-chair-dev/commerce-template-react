@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
@@ -73,17 +73,24 @@ export function ProductDetailPage({
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description')
+  const [showArrows, setShowArrows] = useState(false)
+  const arrowTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   // Use product from prop or find by ID
   const product = productProp || (productId ? products.find((p) => p.id === productId) : null)
+  
+  // Scroll to top when product page loads
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [productId])
   
   if (!product) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <p className="text-white">Product not found</p>
-          <button onClick={() => navigate('/catalog')} className="mt-4 text-primary">
-            Back to catalog
+          <button onClick={() => navigate('/shop')} className="mt-4 text-primary">
+            Back to shop
           </button>
         </div>
       </div>
@@ -92,6 +99,25 @@ export function ProductDetailPage({
   
   const gallery = buildGallery(product)
   const isOnSale = product.stockCount <= 10
+
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (arrowTimeoutRef.current) {
+        clearTimeout(arrowTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleImageClick = () => {
+    setShowArrows(true)
+    if (arrowTimeoutRef.current) {
+      clearTimeout(arrowTimeoutRef.current)
+    }
+    arrowTimeoutRef.current = setTimeout(() => {
+      setShowArrows(false)
+    }, 1000)
+  }
   const isSaved = wishlistFeatureEnabled && onToggleWishlist
     ? useMemo(() => {
         try {
@@ -160,7 +186,7 @@ export function ProductDetailPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pt-24 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-32 sm:pb-10 md:pt-44 lg:px-8">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 pt-32 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-44 sm:pb-10 md:pt-56 lg:pt-60 lg:px-8">
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
@@ -176,7 +202,10 @@ export function ProductDetailPage({
         <div className="grid gap-8 lg:grid-cols-[1.5fr,1fr] lg:gap-12">
           {/* Image Gallery */}
           <div className="space-y-4">
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 aspect-square">
+            <div 
+              className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 aspect-square group cursor-pointer"
+              onClick={handleImageClick}
+            >
               <img
                 src={gallery[selectedImage]}
                 alt={product.name}
@@ -187,13 +216,64 @@ export function ProductDetailPage({
                   Sale
                 </div>
               )}
+              {/* Navigation Arrows */}
+              {gallery.length > 1 && (
+                <>
+                  {selectedImage > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedImage(selectedImage - 1)
+                        setShowArrows(true)
+                        if (arrowTimeoutRef.current) {
+                          clearTimeout(arrowTimeoutRef.current)
+                        }
+                        arrowTimeoutRef.current = setTimeout(() => {
+                          setShowArrows(false)
+                        }, 1000)
+                      }}
+                      className={`absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 backdrop-blur-sm p-3 text-white transition-opacity hover:bg-black/70 ${
+                        showArrows ? 'opacity-100' : 'opacity-0'
+                      }`}
+                      aria-label="Previous image"
+                    >
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                  )}
+                  {selectedImage < gallery.length - 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedImage(selectedImage + 1)
+                        setShowArrows(true)
+                        if (arrowTimeoutRef.current) {
+                          clearTimeout(arrowTimeoutRef.current)
+                        }
+                        arrowTimeoutRef.current = setTimeout(() => {
+                          setShowArrows(false)
+                        }, 1000)
+                      }}
+                      className={`absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 backdrop-blur-sm p-3 text-white transition-opacity hover:bg-black/70 ${
+                        showArrows ? 'opacity-100' : 'opacity-0'
+                      }`}
+                      aria-label="Next image"
+                    >
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  )}
+                </>
+              )}
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 sm:gap-3">
+            <div className="flex gap-2 overflow-x-auto pb-2 sm:gap-3 scrollbar-hide">
               {gallery.map((image, index) => (
                 <button
                   key={image + index}
                   onClick={() => setSelectedImage(index)}
-                  className={`flex-shrink-0 overflow-hidden rounded-xl border-2 transition min-h-[60px] min-w-[60px] sm:rounded-2xl sm:min-h-[80px] sm:min-w-[80px] ${
+                  className={`flex-shrink-0 overflow-hidden rounded-xl border-2 transition h-[60px] w-[60px] sm:rounded-2xl sm:h-[80px] sm:w-[80px] ${
                     selectedImage === index
                       ? 'border-primary scale-105'
                       : 'border-white/10 hover:border-white/30'

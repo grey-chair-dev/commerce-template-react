@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
 import { siteConfig } from '../config'
@@ -63,6 +63,12 @@ export function CatalogPage({
   onAddToCart,
 }: CatalogPageProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Scroll to top when shop page loads
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [location.pathname])
   const [searchParams, setSearchParams] = useSearchParams()
   const categoryFromUrl = searchParams.get('category')
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryFromUrl || 'All')
@@ -139,14 +145,14 @@ export function CatalogPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pt-24 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-32 sm:pb-10 md:pt-44 lg:px-8">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pt-32 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-44 sm:pb-10 md:pt-56 lg:pt-60 lg:px-8">
         {/* Page Header */}
         <div className="space-y-3 sm:space-y-4">
           <h1 className="text-2xl font-semibold leading-tight text-text sm:text-4xl lg:text-5xl">
-            Product Catalog
+            Shop Vinyl Records
           </h1>
           <p className="max-w-2xl text-base text-slate-200 sm:text-lg">
-            Browse our complete selection of products. Filter by category or sort to find exactly
+            Browse our complete selection of vinyl records. Filter by category or sort to find exactly
             what you're looking for.
           </p>
         </div>
