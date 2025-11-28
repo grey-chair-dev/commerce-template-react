@@ -11,6 +11,7 @@ import { initClientMonitors, reportClientError, trackMetric } from './monitoring
 import { useStackAuth, useUser } from './auth/StackAuthProvider'
 import { SearchOverlay } from './components/SearchOverlay'
 import { ProductDetailView } from './components/ProductDetailView'
+import { ProductDetailPage } from './components/ProductDetailPage'
 import { CheckoutShippingPage } from './components/CheckoutShippingPage'
 import { CheckoutPaymentPage } from './components/CheckoutPaymentPage'
 import { CheckoutReviewPage } from './components/CheckoutReviewPage'
@@ -22,6 +23,7 @@ import { LoginPage } from './components/LoginPage'
 import { SignUpPage } from './components/SignUpPage'
 import { ForgotPasswordPage } from './components/ForgotPasswordPage'
 import { ContactUsPage } from './components/ContactUsPage'
+import { FAQPage } from './components/FAQPage'
 import { ShippingReturnsPage } from './components/ShippingReturnsPage'
 import { PrivacyTermsPage } from './components/PrivacyTermsPage'
 import { NotFoundPage } from './components/NotFoundPage'
@@ -29,6 +31,7 @@ import { MaintenancePage } from './components/MaintenancePage'
 import { ComingSoonPage } from './components/ComingSoonPage'
 import { AboutUsPage } from './components/AboutUsPage'
 import { CatalogPage } from './components/CatalogPage'
+import { ClearancePage } from './components/ClearancePage'
 import { Header } from './components/Header'
 import { Footer } from './components/Footer'
 import { moneyFormatter } from './formatters'
@@ -138,6 +141,7 @@ function App() {
   const [isOrderLookupOpen, setOrderLookupOpen] = useState(false)
   const [isDashboardOpen, setDashboardOpen] = useState(false)
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
+  const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
 
   // Navigation handlers using useNavigate
   const handleNavigate = {
@@ -342,7 +346,19 @@ function App() {
   const newArrivals = useMemo(() => {
     return [...products]
       .sort((a, b) => b.stockCount - a.stockCount)
+      .slice(0, 8)
+  }, [products])
+
+  // Featured Categories - unique categories from products
+  const featuredCategories = useMemo(() => {
+    const categoryCounts = new Map<string, number>()
+    products.forEach((p) => {
+      categoryCounts.set(p.category, (categoryCounts.get(p.category) || 0) + 1)
+    })
+    return Array.from(categoryCounts.entries())
+      .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
+      .map(([category]) => category)
   }, [products])
 
 
@@ -489,6 +505,12 @@ function App() {
           element={<ContactUsPage {...createPageProps()} />}
         />
 
+        {/* FAQ Route */}
+        <Route
+          path="/faq"
+          element={<FAQPage {...createPageProps()} />}
+        />
+
         {/* About Us Route */}
         <Route
           path="/about"
@@ -502,9 +524,36 @@ function App() {
             <CatalogPage
               {...createPageProps()}
               onQuickView={(product) => setQuickViewProduct(product)}
-              onViewDetails={(product) => setPdpProduct(product)}
+              onViewDetails={(product) => navigate(`/product/${product.id}`)}
               onToggleWishlist={toggleWishlist}
               onAddToCart={addToCart}
+            />
+          }
+        />
+
+        {/* Clearance/Sale Route */}
+        <Route
+          path="/clearance"
+          element={
+            <ClearancePage
+              {...createPageProps()}
+              onQuickView={(product) => setQuickViewProduct(product)}
+              onViewDetails={(product) => navigate(`/product/${product.id}`)}
+              onToggleWishlist={toggleWishlist}
+              onAddToCart={addToCart}
+            />
+          }
+        />
+
+        {/* Product Detail Page Route */}
+        <Route
+          path="/product/:productId"
+          element={
+            <ProductDetailPage
+              product={null}
+              {...createPageProps()}
+              onAddToCart={addToCart}
+              onToggleWishlist={toggleWishlist}
             />
           }
         />
@@ -548,38 +597,47 @@ function App() {
                 onProductSelect={(product) => setPdpProduct(product)}
               />
 
-              <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
-                <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-8 shadow-brand">
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-4">
-                      <p className="text-xs uppercase tracking-[0.4em] text-secondary">Live</p>
-                      <h2 className="text-4xl font-semibold leading-tight text-text sm:text-5xl">
-                        {siteConfig.hero.headline}
-                      </h2>
-                      <p className="max-w-2xl text-lg text-slate-100">
-                        {siteConfig.hero.subheading}
-                      </p>
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 py-10 text-text sm:px-6 lg:px-8">
+                {/* Hero Section */}
+                <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/20 via-white/10 to-secondary/10 p-8 lg:p-12 shadow-brand">
+                  <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-6 flex-1">
+                      <div className="space-y-4">
+                        <p className="text-xs uppercase tracking-[0.4em] text-secondary">Live Catalog</p>
+                        <h1 className="text-4xl font-bold leading-tight text-text sm:text-5xl lg:text-6xl">
+                          {siteConfig.hero.headline}
+                        </h1>
+                        <p className="max-w-2xl text-lg text-slate-100 lg:text-xl">
+                          {siteConfig.hero.subheading}
+                        </p>
+                      </div>
                       <div className="flex flex-wrap gap-3">
-                        <button className="rounded-full bg-primary px-8 py-3 text-base font-semibold text-white shadow-brand transition hover:bg-primary/80">
+                        <button 
+                          onClick={() => navigate('/catalog')}
+                          className="rounded-full bg-primary px-8 py-3 text-base font-semibold text-white shadow-brand transition hover:bg-primary/80 hover:scale-105"
+                        >
                           {siteConfig.hero.primaryCta}
                         </button>
-                        <button className="rounded-full border border-white/30 px-8 py-3 text-base font-semibold text-white/80 hover:border-white/60">
+                        <button 
+                          onClick={handleNavigate.toContact}
+                          className="rounded-full border border-white/30 px-8 py-3 text-base font-semibold text-white/80 hover:border-white/60 hover:bg-white/5"
+                        >
                           {siteConfig.hero.secondaryCta}
                         </button>
                         <button
-                          className="rounded-full border border-white/20 px-6 py-3 text-base font-semibold text-white/80 hover:border-white/40"
+                          className="rounded-full border border-white/20 px-6 py-3 text-base font-semibold text-white/80 hover:border-white/40 hover:bg-white/5"
                           onClick={() => setSearchOpen(true)}
                         >
-                          Search catalog
+                          Search
                         </button>
                       </div>
                     </div>
-                    <div className="w-full max-w-sm rounded-2xl border border-white/20 bg-surface/70 p-6 text-sm text-slate-300">
+                    <div className="w-full max-w-sm rounded-2xl border border-white/20 bg-surface/80 backdrop-blur-sm p-6 text-sm text-slate-300">
                       <p className="text-xs uppercase tracking-[0.4em] text-secondary">
-                        Real-time adapter health
+                        Real-time Status
                       </p>
                       <div className="mt-4 flex items-center justify-between">
-                        <span className="text-4xl font-semibold text-text">
+                        <span className="text-3xl font-semibold text-text">
                           {connectionMode === 'snapshot'
                             ? 'Snapshot'
                             : connectionMode === 'mock'
@@ -591,10 +649,10 @@ function App() {
                         <span className={`h-3 w-3 rounded-full ${statusColor}`} />
                       </div>
                       <p className="mt-2 text-xs text-slate-400">
-                        Last diff landed in {lastLatencyMs} ms · Target {'<'} 1000 ms
+                        Latency: {lastLatencyMs}ms
                       </p>
                       <p className="text-xs text-slate-400">
-                        Adapter status:{' '}
+                        Status:{' '}
                         <span
                           className={
                             adapterHealth === 'healthy'
@@ -607,29 +665,95 @@ function App() {
                           {adapterHealthLabel}
                         </span>
                       </p>
-                      <p className="mt-4 text-xs text-slate-400">
-                        Source-of-truth: Neon · Origin: Square POS · Cache: Upstash Redis
-                      </p>
                     </div>
                   </div>
                 </section>
 
-              {/* New Arrivals Section */}
-              <SectionShell
-                title="New Arrivals"
-                description="Discover our latest products added this week. Fresh inventory updated in real-time."
-              >
+                {/* Featured Categories */}
+                {featuredCategories.length > 0 && (
+                  <SectionShell
+                    title="Shop by Category"
+                    description="Browse our curated collections"
+                  >
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {featuredCategories.map((category) => {
+                        const categoryProducts = products.filter((p) => p.category === category)
+                        const categoryImage = categoryProducts[0]?.imageUrl
+                        return (
+                          <button
+                            key={category}
+                            onClick={() => {
+                              navigate(`/catalog?category=${encodeURIComponent(category)}`)
+                            }}
+                            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-6 text-left transition hover:border-primary/60 hover:scale-[1.02]"
+                          >
+                            {categoryImage && (
+                              <div className="absolute inset-0 opacity-10 transition group-hover:opacity-20">
+                                <img
+                                  src={categoryImage}
+                                  alt={category}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div className="relative z-10">
+                              <h3 className="text-lg font-semibold text-white">{category}</h3>
+                              <p className="mt-1 text-sm text-slate-400">
+                                {categoryProducts.length} {categoryProducts.length === 1 ? 'item' : 'items'}
+                              </p>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </SectionShell>
+                )}
+
+                {/* New Arrivals Section */}
+                <SectionShell
+                  title="New Arrivals"
+                  description="Discover our latest products. Fresh inventory updated in real-time."
+                >
                 {newArrivals.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/20 p-6 text-center text-sm text-slate-400">
                     No new arrivals at the moment. Check back soon!
                   </div>
                 ) : (
                   <div className="relative">
-                    <div className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide">
+                    {/* Left Arrow */}
+                    <button
+                      onClick={() => {
+                        if (newArrivalsScrollRef.current) {
+                          newArrivalsScrollRef.current.scrollBy({ left: -320, behavior: 'smooth' })
+                        }
+                      }}
+                      className="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-surface/90 p-2 text-white shadow-brand backdrop-blur-sm transition hover:bg-surface hover:scale-110"
+                      aria-label="Scroll left"
+                    >
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    {/* Right Arrow */}
+                    <button
+                      onClick={() => {
+                        if (newArrivalsScrollRef.current) {
+                          newArrivalsScrollRef.current.scrollBy({ left: 320, behavior: 'smooth' })
+                        }
+                      }}
+                      className="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-full bg-surface/90 p-2 text-white shadow-brand backdrop-blur-sm transition hover:bg-surface hover:scale-110"
+                      aria-label="Scroll right"
+                    >
+                      <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    <div ref={newArrivalsScrollRef} className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide">
                       {newArrivals.map((product) => (
                         <article
                           key={product.id}
-                          className="flex min-w-[280px] max-w-[280px] flex-shrink-0 flex-col overflow-hidden rounded-3xl border border-white/10 bg-surface/70 shadow-brand transition hover:-translate-y-1 hover:border-primary/60"
+                          className="flex min-w-[280px] max-w-[280px] flex-shrink-0 flex-col overflow-hidden rounded-3xl border border-white/10 bg-surface/70 shadow-brand transition hover:-translate-y-1 hover:border-primary/60 cursor-pointer"
+                          onClick={() => navigate(`/product/${product.id}`)}
                         >
                           <div className="relative aspect-video w-full overflow-hidden">
                             <img
@@ -670,20 +794,29 @@ function App() {
                             <div className="mt-auto flex flex-col gap-2">
                               <button
                                 className="w-full rounded-full bg-primary/80 px-4 py-2 text-xs font-semibold text-white shadow-brand"
-                                onClick={() => addToCart(product)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  addToCart(product)
+                                }}
                               >
                                 Add to cart
                               </button>
                               <div className="flex gap-2">
                                 <button
                                   className="flex-1 rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:border-white/40"
-                                  onClick={() => setQuickViewProduct(product)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setQuickViewProduct(product)
+                                  }}
                                 >
                                   Quick view
                                 </button>
                                 <button
                                   className="flex-1 rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:border-white/40"
-                                  onClick={() => setPdpProduct(product)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    navigate(`/product/${product.id}`)
+                                  }}
                                 >
                                   Details
                                 </button>
@@ -751,78 +884,84 @@ function App() {
                 </SectionShell>
               ) : null}
 
-              {/* Trust Elements */}
-              <section className="rounded-3xl border border-white/10 bg-white/5 p-6 lg:p-8">
-                <h2 className="mb-6 text-2xl font-semibold text-text">Why Shop With Us</h2>
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="rounded-full bg-primary/20 p-4">
-                      <svg className="h-8 w-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                      </svg>
+                {/* Trust Elements */}
+                <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/5 to-white/10 p-8 lg:p-12">
+                  <div className="mb-8 text-center">
+                    <h2 className="text-3xl font-bold text-text">Why Shop With Us</h2>
+                    <p className="mt-2 text-slate-300">We're committed to providing the best shopping experience</p>
+                  </div>
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <div className="rounded-full bg-primary/20 p-5 transition hover:scale-110">
+                        <svg className="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-base font-semibold text-white">Secure Checkout</h3>
+                      <p className="text-sm text-slate-400">SSL encrypted payments</p>
                     </div>
-                    <h3 className="text-sm font-semibold text-white">Secure Checkout</h3>
-                    <p className="text-xs text-slate-400">SSL encrypted payments</p>
-                  </div>
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="rounded-full bg-accent/20 p-4">
-                      <svg className="h-8 w-8 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <div className="rounded-full bg-accent/20 p-5 transition hover:scale-110">
+                        <svg className="h-10 w-10 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <h3 className="text-base font-semibold text-white">Free Returns</h3>
+                      <p className="text-sm text-slate-400">30-day return policy</p>
                     </div>
-                    <h3 className="text-sm font-semibold text-white">Free Returns</h3>
-                    <p className="text-xs text-slate-400">30-day return policy</p>
-                  </div>
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="rounded-full bg-secondary/20 p-4">
-                      <svg className="h-8 w-8 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <div className="rounded-full bg-secondary/20 p-5 transition hover:scale-110">
+                        <svg className="h-10 w-10 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-base font-semibold text-white">Fast Shipping</h3>
+                      <p className="text-sm text-slate-400">1-2 day delivery</p>
                     </div>
-                    <h3 className="text-sm font-semibold text-white">Fast Shipping</h3>
-                    <p className="text-xs text-slate-400">1-2 day delivery</p>
-                  </div>
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <div className="rounded-full bg-primary/20 p-4">
-                      <svg className="h-8 w-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <div className="rounded-full bg-primary/20 p-5 transition hover:scale-110">
+                        <svg className="h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-base font-semibold text-white">24/7 Support</h3>
+                      <p className="text-sm text-slate-400">Always here to help</p>
                     </div>
-                    <h3 className="text-sm font-semibold text-white">24/7 Support</h3>
-                    <p className="text-xs text-slate-400">Always here to help</p>
                   </div>
-                </div>
-              </section>
-
-              {/* Promotional Sections */}
-              <div className="grid gap-6 md:grid-cols-1">
-                <section className="rounded-3xl border border-secondary/30 bg-gradient-to-br from-secondary/20 to-secondary/10 p-6 lg:p-8">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-2xl">⚡</span>
-                    <h2 className="text-xl font-semibold text-white">Limited Time Offers</h2>
-                  </div>
-                  <p className="mb-4 text-sm text-slate-200">
-                    Special deals and discounts on select items. Limited quantities available.
-                  </p>
-                  <button
-                    onClick={() => {
-                      navigate('/catalog')
-                    }}
-                    className="rounded-full border border-secondary/50 bg-secondary/20 px-6 py-2 text-sm font-semibold text-white hover:bg-secondary/30"
-                  >
-                    View Deals
-                  </button>
                 </section>
-              </div>
 
-              <SectionShell title="Visit / contact">
-                <div className="grid gap-6 md:grid-cols-3">
-                  <ContactCard label="Phone" value={siteConfig.contact.phone} />
-                  <ContactCard label="Email" value={siteConfig.contact.email} />
-                  <ContactCard label="Location" value={siteConfig.contact.location} />
-                </div>
-                <p className="mt-4 text-sm text-slate-400">Hours: {siteConfig.contact.hours}</p>
-              </SectionShell>
+                {/* Promotional Banner */}
+                <section className="rounded-3xl border border-secondary/30 bg-gradient-to-br from-secondary/20 via-primary/10 to-secondary/10 p-8 lg:p-12">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-bold text-white">Limited Time Offers</h2>
+                      </div>
+                      <p className="max-w-2xl text-base text-slate-200">
+                        Special deals and discounts on select items. Limited quantities available. Shop now before they're gone!
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate('/clearance')}
+                      className="rounded-full border-2 border-secondary/50 bg-secondary/30 px-8 py-3 text-base font-semibold text-white transition hover:bg-secondary/40 hover:scale-105 lg:flex-shrink-0"
+                    >
+                      Shop Clearance →
+                    </button>
+                  </div>
+                </section>
+
+                {/* Contact Section */}
+                <SectionShell title="Visit Us">
+                  <div className="grid gap-6 md:grid-cols-3">
+                    <ContactCard label="Phone" value={siteConfig.contact.phone} />
+                    <ContactCard label="Email" value={siteConfig.contact.email} />
+                    <ContactCard label="Location" value={siteConfig.contact.location} />
+                  </div>
+                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 text-center">
+                    <p className="text-sm font-semibold text-white">Store Hours</p>
+                    <p className="mt-1 text-sm text-slate-400">{siteConfig.contact.hours}</p>
+                  </div>
+                </SectionShell>
 
               <button
                 className="fixed bottom-6 right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary/80 md:hidden"
@@ -1294,7 +1433,9 @@ function App() {
         <ProductDetailView
           product={pdpProduct}
           onClose={() => setPdpProduct(null)}
-          onAddToCart={() => addToCart(pdpProduct)}
+          onAddToCart={(quantity = 1) => {
+            addToCart(pdpProduct, quantity)
+          }}
           onSave={wishlistFeatureEnabled ? () => toggleWishlist(pdpProduct) : undefined}
           isSaved={wishlistFeatureEnabled && effectiveWishlist.some((item) => item.id === pdpProduct.id)}
         />

@@ -1,4 +1,5 @@
 import { type ReactNode, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { featureFlags, siteConfig } from '../config'
 import type { Product, ConnectionMode } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
@@ -50,6 +51,7 @@ export function HomePage({
   onAddToCart,
   onSearch,
 }: HomePageProps) {
+  const navigate = useNavigate()
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [sortBy, setSortBy] = useState<'featured' | 'priceAsc' | 'priceDesc'>('featured')
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
@@ -202,7 +204,8 @@ export function HomePage({
           {displayProducts.map((product) => (
             <article
               key={product.id}
-              className="flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-surface/70 shadow-brand transition hover:-translate-y-1 hover:border-primary/60"
+              className="flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-surface/70 shadow-brand transition hover:-translate-y-1 hover:border-primary/60 cursor-pointer"
+              onClick={() => navigate(`/product/${product.id}`)}
             >
               <div className="relative aspect-video w-full overflow-hidden">
                 <img
@@ -248,13 +251,19 @@ export function HomePage({
                 <div className="mt-auto flex flex-wrap gap-2">
                   <button
                     className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
-                    onClick={() => onQuickView(product)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onQuickView(product)
+                    }}
                   >
                     Quick view
                   </button>
                   <button
                     className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
-                    onClick={() => onViewDetails(product)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onViewDetails(product)
+                    }}
                   >
                     View details
                   </button>
@@ -265,14 +274,20 @@ export function HomePage({
                           ? 'border-secondary text-secondary'
                           : 'border-white/20 text-white/80 hover:border-white/40'
                       }`}
-                      onClick={() => onToggleWishlist(product)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onToggleWishlist(product)
+                      }}
                     >
                       {effectiveWishlist.some((item) => item.id === product.id) ? 'Saved' : 'Save'}
                     </button>
                   ) : null}
                   <button
                     className="w-full rounded-full bg-primary/80 px-4 py-2 text-xs font-semibold text-white shadow-brand"
-                    onClick={() => onAddToCart(product)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onAddToCart(product)
+                    }}
                   >
                     Add to cart
                   </button>

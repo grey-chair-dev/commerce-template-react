@@ -129,7 +129,7 @@ export const siteConfig: SiteConfig = {
   },
   promoBar: {
     enabled: true,
-    message: '🚚 Free shipping on orders over $50 · 🎉 New arrivals every week',
+    message: 'Free shipping on orders over $50 · New arrivals every week',
   },
 }
 

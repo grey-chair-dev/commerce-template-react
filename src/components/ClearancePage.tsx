@@ -1,10 +1,11 @@
 import { useMemo, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
 import { Header } from './Header'
 import { Footer } from './Footer'
 
-type CatalogPageProps = {
+type ClearancePageProps = {
   user: any
   isLoading: boolean
   cartCount: number
@@ -32,8 +33,9 @@ type CatalogPageProps = {
 }
 
 const BATCH_SIZE = 12
+const CLEARANCE_STOCK_THRESHOLD = 10 // Products with stock <= this are considered clearance
 
-export function CatalogPage({
+export function ClearancePage({
   user,
   isLoading,
   cartCount,
@@ -58,20 +60,26 @@ export function CatalogPage({
   onViewDetails,
   onToggleWishlist,
   onAddToCart,
-}: CatalogPageProps) {
+}: ClearancePageProps) {
+  const navigate = useNavigate()
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [sortBy, setSortBy] = useState<'featured' | 'priceAsc' | 'priceDesc'>('featured')
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
   const infiniteSentinelRef = useRef<HTMLDivElement>(null)
 
-  const categories = useMemo(() => {
-    const cats = new Set<string>(['All'])
-    products.forEach((p) => cats.add(p.category))
-    return Array.from(cats).sort()
+  // Filter products that are on clearance (low stock)
+  const clearanceProducts = useMemo(() => {
+    return products.filter((p) => p.stockCount <= CLEARANCE_STOCK_THRESHOLD)
   }, [products])
 
+  const categories = useMemo(() => {
+    const cats = new Set<string>(['All'])
+    clearanceProducts.forEach((p) => cats.add(p.category))
+    return Array.from(cats).sort()
+  }, [clearanceProducts])
+
   const filteredProducts = useMemo(() => {
-    let filtered = products
+    let filtered = clearanceProducts
 
     if (selectedCategory !== 'All') {
       filtered = filtered.filter((p) => p.category === selectedCategory)
@@ -82,11 +90,12 @@ export function CatalogPage({
     } else if (sortBy === 'priceDesc') {
       filtered = [...filtered].sort((a, b) => b.price - a.price)
     } else {
-      filtered = [...filtered].sort((a, b) => b.stockCount - a.stockCount)
+      // For clearance, sort by stock (lowest first - most urgent)
+      filtered = [...filtered].sort((a, b) => a.stockCount - b.stockCount)
     }
 
     return filtered
-  }, [products, selectedCategory, sortBy])
+  }, [clearanceProducts, selectedCategory, sortBy])
 
   const displayProducts = filteredProducts.slice(0, visibleCount)
 
@@ -122,12 +131,16 @@ export function CatalogPage({
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-10 text-text sm:px-6 lg:px-8">
         {/* Page Header */}
         <div className="space-y-4">
-          <h1 className="text-4xl font-semibold leading-tight text-text sm:text-5xl">
-            Product Catalog
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl font-semibold leading-tight text-text sm:text-5xl">
+              Clearance & Sale
+            </h1>
+            <span className="rounded-full bg-secondary px-4 py-1 text-sm font-semibold text-white">
+              Limited Stock
+            </span>
+          </div>
           <p className="max-w-2xl text-lg text-slate-200">
-            Browse our complete selection of products. Filter by category or sort to find exactly
-            what you're looking for.
+            Shop our clearance items while supplies last. Limited quantities available at great prices.
           </p>
         </div>
 
@@ -161,7 +174,7 @@ export function CatalogPage({
               }}
               className="rounded-full border border-white/20 bg-transparent px-4 py-2 text-sm text-white focus:outline-none"
             >
-              <option value="featured">Inventory (desc)</option>
+              <option value="featured">Stock (lowest first)</option>
               <option value="priceAsc">Price · low → high</option>
               <option value="priceDesc">Price · high → low</option>
             </select>
@@ -175,8 +188,13 @@ export function CatalogPage({
               {displayProducts.map((product) => (
                 <article
                   key={product.id}
-                  className="flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-surface/70 shadow-brand transition hover:-translate-y-1 hover:border-primary/60"
+                  className="relative flex flex-col overflow-hidden rounded-3xl border border-secondary/30 bg-surface/70 shadow-brand transition hover:-translate-y-1 hover:border-secondary/60 cursor-pointer"
+                  onClick={() => navigate(`/product/${product.id}`)}
                 >
+                  {/* Clearance Badge */}
+                  <div className="absolute left-4 top-4 z-10 rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-white">
+                    Clearance
+                  </div>
                   <div className="relative aspect-video w-full overflow-hidden">
                     <img
                       src={product.imageUrl}
@@ -184,7 +202,7 @@ export function CatalogPage({
                       className="h-full w-full object-cover"
                       loading="lazy"
                     />
-                    <span className="absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs uppercase tracking-[0.3em] text-white">
+                    <span className="absolute right-4 top-4 rounded-full bg-black/60 px-3 py-1 text-xs uppercase tracking-[0.3em] text-white">
                       {product.category}
                     </span>
                   </div>
@@ -200,34 +218,34 @@ export function CatalogPage({
                     </div>
                     <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-400">
                       <span>Stock</span>
-                      <span
-                        className={
-                          product.stockCount <= 5
-                            ? 'font-semibold text-secondary'
-                            : 'font-semibold text-accent'
-                        }
-                      >
-                        {product.stockCount} units
+                      <span className="font-semibold text-secondary">
+                        {product.stockCount} {product.stockCount === 1 ? 'left' : 'left'}
                       </span>
                     </div>
                     <div className="h-1 rounded-full bg-white/10">
                       <div
-                        className="h-full rounded-full bg-accent transition-all"
+                        className="h-full rounded-full bg-secondary transition-all"
                         style={{
-                          width: `${Math.min(100, (product.stockCount / 50) * 100)}%`,
+                          width: `${Math.min(100, (product.stockCount / CLEARANCE_STOCK_THRESHOLD) * 100)}%`,
                         }}
                       />
                     </div>
                     <div className="mt-auto flex flex-wrap gap-2">
                       <button
                         className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
-                        onClick={() => onQuickView(product)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onQuickView(product)
+                        }}
                       >
                         Quick view
                       </button>
                       <button
                         className="flex-1 rounded-full border border-white/20 px-4 py-2 text-xs text-white/80 hover:border-white/40"
-                        onClick={() => onViewDetails(product)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onViewDetails(product)
+                        }}
                       >
                         View details
                       </button>
@@ -238,7 +256,10 @@ export function CatalogPage({
                               ? 'border-secondary text-secondary'
                               : 'border-white/20 text-white/80 hover:border-white/40'
                           }`}
-                          onClick={() => onToggleWishlist(product)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onToggleWishlist(product)
+                          }}
                         >
                           {effectiveWishlist.some((item: Product) => item.id === product.id)
                             ? 'Saved'
@@ -246,8 +267,11 @@ export function CatalogPage({
                         </button>
                       ) : null}
                       <button
-                        className="w-full rounded-full bg-primary/80 px-4 py-2 text-xs font-semibold text-white shadow-brand"
-                        onClick={() => onAddToCart(product)}
+                        className="w-full rounded-full bg-secondary px-4 py-2 text-xs font-semibold text-white shadow-brand hover:bg-secondary/80"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onAddToCart(product)
+                        }}
                       >
                         Add to cart
                       </button>
@@ -274,9 +298,9 @@ export function CatalogPage({
           </>
         ) : (
           <div className="rounded-2xl border border-dashed border-white/20 p-12 text-center">
-            <p className="text-lg font-semibold text-white">No products found</p>
+            <p className="text-lg font-semibold text-white">No clearance items available</p>
             <p className="mt-2 text-sm text-slate-400">
-              No products match your current filters. Try selecting a different category.
+              Check back soon for new clearance deals and special offers.
             </p>
             <button
               className="mt-4 rounded-full border border-white/20 px-6 py-2 text-sm text-white/80 hover:border-white/40"
@@ -285,7 +309,7 @@ export function CatalogPage({
                 setVisibleCount(BATCH_SIZE)
               }}
             >
-              Show all products
+              View all products
             </button>
           </div>
         )}
