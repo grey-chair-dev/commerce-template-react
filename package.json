@@ -18,10 +18,14 @@
     "order-tracking:add": "node scripts/order-tracking-toggle.mjs add",
     "order-tracking:delete": "node scripts/order-tracking-toggle.mjs delete",
     "maintenance:add": "node scripts/maintenance-toggle.mjs add",
-    "maintenance:delete": "node scripts/maintenance-toggle.mjs delete"
+    "maintenance:delete": "node scripts/maintenance-toggle.mjs delete",
+    "client:generate-hash": "node scripts/generate-client-password-hash.mjs",
+    "client:generate-secret": "node scripts/generate-auth-secret.mjs"
   },
   "dependencies": {
     "@neondatabase/neon-auth": "^0.1.0-alpha.3",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.1.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
@@ -29,6 +33,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

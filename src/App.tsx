@@ -34,6 +34,8 @@ import { CatalogPage } from './components/CatalogPage'
 import { ClearancePage } from './components/ClearancePage'
 import { Header } from './components/Header'
 import { Footer } from './components/Footer'
+import { ClientLoginPage } from './components/ClientLoginPage'
+import { isClientAuthRequired, verifyClientSession } from './services/clientAuth'
 import { moneyFormatter } from './formatters'
 
 export type CartItem = Product & { quantity: number }
@@ -141,7 +143,21 @@ function App() {
   const [isOrderLookupOpen, setOrderLookupOpen] = useState(false)
   const [isDashboardOpen, setDashboardOpen] = useState(false)
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
+  const [isClientAuthenticated, setIsClientAuthenticated] = useState(false)
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
+
+  // Check client authentication on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!isClientAuthRequired()) {
+        setIsClientAuthenticated(true)
+        return
+      }
+      const isAuthenticated = await verifyClientSession()
+      setIsClientAuthenticated(isAuthenticated)
+    }
+    checkAuth()
+  }, [])
 
   // Sync auth page state with route
   useEffect(() => {
@@ -463,6 +479,15 @@ function App() {
         reason="We are currently performing scheduled maintenance to improve your experience."
         expectedReturn="December 15, 2024 at 2:00 PM EST"
         onNotifyMe={handleMaintenanceNotify}
+      />
+    )
+  }
+
+  // Client authentication gate (development only)
+  if (isClientAuthRequired() && !isClientAuthenticated) {
+    return (
+      <ClientLoginPage
+        onAuthenticated={() => setIsClientAuthenticated(true)}
       />
     )
   }
