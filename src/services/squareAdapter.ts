@@ -38,7 +38,7 @@ export type SquareProduct = {
  */
 export function createSquareClient(config: SquareConfig) {
   return new SquareClient({
-    accessToken: config.accessToken,
+    token: config.accessToken,
     environment: config.environment === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
   })
 }
@@ -53,14 +53,17 @@ export async function fetchSquareCatalogItems(
   try {
     const catalog = client.catalog
     
-    // List all catalog objects
-    const response = await catalog.listCatalog({ types: ['ITEM'] })
+    // List all catalog objects of type ITEM
+    const response = await catalog.list({ types: 'ITEM' })
     
-    if (response.result?.objects) {
-      return response.result.objects.filter((obj: any) => obj.type === 'ITEM')
+    const items: any[] = []
+    for await (const page of response) {
+      if (page.result?.objects) {
+        items.push(...page.result.objects.filter((obj: any) => obj.type === 'ITEM'))
+      }
     }
     
-    return []
+    return items
   } catch (error) {
     console.error('[SquareAdapter] Error fetching catalog items:', error)
     throw error
@@ -82,18 +85,21 @@ export async function fetchSquareInventory(
     
     // Fetch inventory counts for all items at once
     try {
-      const response = await inventory.batchRetrieveInventoryCounts({
+      const response = await inventory.batchGetCounts({
         catalogObjectIds,
         locationIds: [locationId],
       })
       
-      if (response.result?.counts) {
-        // Group counts by catalog object ID
-        for (const count of response.result.counts) {
-          const catalogObjectId = count.catalogObjectId
-          if (catalogObjectId) {
-            const currentCount = inventoryMap.get(catalogObjectId) || 0
-            inventoryMap.set(catalogObjectId, currentCount + (count.quantity || 0))
+      // Iterate through paginated results
+      for await (const page of response) {
+        if (page.result?.counts) {
+          // Group counts by catalog object ID
+          for (const count of page.result.counts) {
+            const catalogObjectId = count.catalogObjectId
+            if (catalogObjectId) {
+              const currentCount = inventoryMap.get(catalogObjectId) || 0
+              inventoryMap.set(catalogObjectId, currentCount + (Number(count.quantity) || 0))
+            }
           }
         }
       }
@@ -220,12 +226,16 @@ export async function fetchSquareProductById(
   
   try {
     const catalog = client.catalog
-    const response = await catalog.retrieveCatalogObject(productId, { includeRelatedObjects: true })
+    const response = await catalog.batchGet({
+      objectIds: [productId],
+      includeRelatedObjects: true,
+    })
     
-    if (response.result?.object) {
+    if (response.result?.objects && response.result.objects.length > 0) {
+      const object = response.result.objects[0]
       const inventoryMap = await fetchSquareInventory(client, [productId], locationId)
       const inventoryCount = inventoryMap.get(productId) || 0
-      return transformSquareItemToProduct(response.result.object, inventoryCount)
+      return transformSquareItemToProduct(object, inventoryCount)
     }
     
     return null
