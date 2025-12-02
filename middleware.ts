@@ -108,7 +108,12 @@ const BLOCKED_USER_AGENTS = [
 
 export default function middleware(request: Request) {
   // In Vercel Edge runtime, request.url is available
-  const urlString = request.url || (request as any).nextUrl?.href || ''
+  // Type assertion for Edge runtime Request type
+  const requestAny = request as any
+  const urlString = requestAny.url || requestAny.nextUrl?.href || ''
+  if (!urlString) {
+    return new Response('Bad Request', { status: 400 })
+  }
   const url = new URL(urlString)
   const pathname = url.pathname
   const userAgent = request.headers.get('user-agent') || ''

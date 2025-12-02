@@ -51,8 +51,14 @@ export async function getCachedProducts(appId: string = 'spiralgroove'): Promise
       return null
     }
     
-    const row = rows[0]
+    // Type assertion for Neon DB result structure
+    const row = rows[0] as any
+    if (!row || typeof row !== 'object') {
+      return null
+    }
+    
     const value = row.value as CacheValue
+    const updatedAt = row.updated_at
     
     // Enhance products with inferred category, format, and status using enums
     const enhancedProducts = value.products.map((product: any) => {
@@ -78,7 +84,7 @@ export async function getCachedProducts(appId: string = 'spiralgroove'): Promise
       ...value,
       products: enhancedProducts,
       count: enhancedProducts.length,
-      timestamp: row.updated_at.toISOString(),
+      timestamp: updatedAt instanceof Date ? updatedAt.toISOString() : new Date(updatedAt).toISOString(),
     }
   } catch (error: any) {
     console.error('[Cache Service] Error reading from cache:', error)

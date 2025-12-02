@@ -100,7 +100,11 @@ export function AboutUsPage({
         onProductSelect={onProductSelect}
       />
 
+<<<<<<< HEAD
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-32 pb-10 text-text sm:px-6 sm:pt-44 md:pt-56 lg:pt-60 lg:px-8">
+=======
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-36 pb-10 text-text sm:px-6 sm:pt-44 md:pt-56 lg:px-8">
+>>>>>>> aba70b3a637a56e82f7ca9c21200a91188d65a9d
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white">About Us</h1>

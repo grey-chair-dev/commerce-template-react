@@ -777,7 +777,11 @@ function App() {
                 onProductSelect={(product) => setPdpProduct(product)}
               />
 
+<<<<<<< HEAD
               <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-32 pb-10 text-text sm:px-6 sm:pt-44 md:pt-56 lg:pt-60 lg:px-8">
+=======
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-6 pt-36 pb-12 text-text sm:px-8 sm:pt-44 sm:pb-16 md:pt-56 lg:px-12 lg:pb-20">
+>>>>>>> aba70b3a637a56e82f7ca9c21200a91188d65a9d
                 {/* Hero Section */}
                 <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/20 via-white/10 to-secondary/10 p-8 lg:p-12 shadow-brand">
                   <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
@@ -1160,6 +1164,7 @@ function App() {
                   </div>
                 </SectionShell>
 
+<<<<<<< HEAD
               {location.pathname !== '/' && (
                 <button
                   className="fixed bottom-6 right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary/80 md:hidden"
@@ -1170,6 +1175,8 @@ function App() {
                 </button>
               )}
 
+=======
+>>>>>>> aba70b3a637a56e82f7ca9c21200a91188d65a9d
               </main>
 
               <Footer
