@@ -21,16 +21,24 @@ export type SquareConfig = {
   applicationId?: string
 }
 
+import type { ProductCategory, RecordFormat, RecordCondition, ProductStatus } from '../types/productEnums.js'
+import { enhanceProductWithInferences } from '../utils/productCategorizer.js'
+
 export type SquareProduct = {
   id: string
   name: string
   description: string
   price: number
-  category: string
+  category: string | ProductCategory
   stockCount: number
   imageUrl: string
   rating: number
   reviewCount: number
+  // Extended fields (optional)
+  format?: RecordFormat | string
+  conditionSleeve?: RecordCondition | string
+  conditionMedia?: RecordCondition | string
+  status?: ProductStatus
 }
 
 /**
@@ -53,19 +61,85 @@ export async function fetchSquareCatalogItems(
   try {
     const catalog = client.catalog
     
-    // List all catalog objects of type ITEM
+    // List catalog objects - types should be a comma-separated string
+    console.log('[SquareAdapter] Fetching catalog objects with types: "ITEM"...')
     const response = await catalog.list({ types: 'ITEM' })
     
     const items: any[] = []
-    for await (const page of response) {
-      if (page.result?.objects) {
-        items.push(...page.result.objects.filter((obj: any) => obj.type === 'ITEM'))
+    let pageCount = 0
+    let totalObjects = 0
+    
+    // The Page class iterates over CatalogObject items directly, not response objects
+    for await (const catalogObject of response) {
+      totalObjects++
+      
+      // Each item in the iteration is a CatalogObject
+      if (catalogObject.type === 'ITEM') {
+        items.push(catalogObject)
       }
+      
+      // Log every 10 items to avoid spam
+      if (totalObjects % 10 === 0) {
+        console.log(`[SquareAdapter] Processed ${totalObjects} objects, found ${items.length} ITEM objects so far...`)
+      }
+    }
+    
+    // Also check the response object for metadata
+    if (response.response) {
+      pageCount = 1 // We'll count pages differently
+      const responseData = response.response as any
+      console.log(`[SquareAdapter] Response metadata:`, {
+        cursor: responseData.cursor,
+        hasMore: response.hasNextPage(),
+      })
+    }
+    
+    console.log(`[SquareAdapter] Summary: ${items.length} ITEM objects found (${totalObjects} total objects processed)`)
+    
+    if (items.length > 0) {
+      console.log(`[SquareAdapter] Item IDs:`, items.map((item: any) => item.id).slice(0, 10))
+      if (items[0]) {
+        console.log('[SquareAdapter] First item sample:', {
+          id: items[0].id,
+          type: items[0].type,
+          name: items[0].itemData?.name,
+          hasVariations: !!items[0].itemData?.variations?.length,
+        })
+      }
+    }
+    
+    // If no items found, try listing ALL objects to see what's available
+    if (items.length === 0) {
+      console.log('[SquareAdapter] No ITEM objects found. Trying to list ALL catalog objects...')
+      const allObjectsResponse = await catalog.list()
+      let allObjects: any[] = []
+      
+      for await (const catalogObject of allObjectsResponse) {
+        allObjects.push(catalogObject)
+      }
+      
+      const objectTypes = [...new Set(allObjects.map((obj: any) => obj.type))]
+      console.log(`[SquareAdapter] Total catalog objects: ${allObjects.length} of types:`, objectTypes)
+      
+      if (allObjects.length > 0) {
+        // Filter for items
+        const foundItems = allObjects.filter((obj: any) => obj.type === 'ITEM')
+        console.log(`[SquareAdapter] Found ${foundItems.length} ITEM objects in all objects`)
+        items.push(...foundItems)
+      }
+    }
+    
+    if (items.length === 0 && totalObjects === 0) {
+      console.warn('[SquareAdapter] No catalog objects found. Your Square sandbox may be empty.')
+      console.warn('[SquareAdapter] Add items via Square Dashboard or use the Square API to create test items.')
     }
     
     return items
   } catch (error) {
     console.error('[SquareAdapter] Error fetching catalog items:', error)
+    if (error instanceof Error) {
+      console.error('[SquareAdapter] Error details:', error.message, error.stack)
+    }
     throw error
   }
 }
@@ -81,13 +155,16 @@ export async function fetchSquareInventory(
   try {
     const inventory = client.inventory
     
+    // Trim whitespace/newlines from locationId (common issue with .env files)
+    const trimmedLocationId = locationId.trim()
+    
     const inventoryMap = new Map<string, number>()
     
     // Fetch inventory counts for all items at once
     try {
       const response = await inventory.batchGetCounts({
         catalogObjectIds,
-        locationIds: [locationId],
+        locationIds: [trimmedLocationId],
       })
       
       // Iterate through paginated results
@@ -98,7 +175,14 @@ export async function fetchSquareInventory(
             const catalogObjectId = count.catalogObjectId
             if (catalogObjectId) {
               const currentCount = inventoryMap.get(catalogObjectId) || 0
-              inventoryMap.set(catalogObjectId, currentCount + (Number(count.quantity) || 0))
+              // Convert BigInt to Number if needed
+              let quantity = 0
+              if (count.quantity != null) {
+                quantity = typeof count.quantity === 'bigint' 
+                  ? Number(count.quantity) 
+                  : Number(count.quantity) || 0
+              }
+              inventoryMap.set(catalogObjectId, currentCount + quantity)
             }
           }
         }
@@ -126,21 +210,61 @@ export async function fetchSquareInventory(
 }
 
 /**
+ * Fetch image URLs from Square catalog
+ */
+export async function fetchSquareImageUrls(
+  client: SquareClient,
+  imageIds: string[],
+): Promise<Map<string, string>> {
+  if (imageIds.length === 0) {
+    return new Map()
+  }
+
+  try {
+    const catalog = client.catalog
+    const imageMap = new Map<string, string>()
+
+    // Fetch image objects in batches (Square API limit is typically 100 objects per batch)
+    const batchSize = 100
+    for (let i = 0; i < imageIds.length; i += batchSize) {
+      const batch = imageIds.slice(i, i + batchSize)
+      const response = await catalog.batchGet({
+        objectIds: batch,
+        includeRelatedObjects: false,
+      })
+
+      if (response.result?.objects) {
+        for (const obj of response.result.objects) {
+          if (obj.type === 'IMAGE' && obj.imageData?.url) {
+            imageMap.set(obj.id, obj.imageData.url)
+          }
+        }
+      }
+    }
+
+    return imageMap
+  } catch (error) {
+    console.warn('[SquareAdapter] Error fetching image URLs:', error)
+    return new Map()
+  }
+}
+
+/**
  * Transform Square catalog item to app Product format
  */
 export function transformSquareItemToProduct(
   squareItem: any,
   inventoryCount: number = 0,
+  imageUrlMap?: Map<string, string>,
 ): SquareProduct {
   // Extract item data
   const itemData = squareItem.itemData || {}
   
-  // Get primary image URL
+  // Get primary image URL from the image map
   let imageUrl = ''
-  if (itemData.imageIds && itemData.imageIds.length > 0) {
-    // In a real implementation, you'd fetch the image URL from Square
-    // For now, we'll use a placeholder or construct from image ID
-    imageUrl = `https://square-cdn.com/${itemData.imageIds[0]}` // This is a placeholder
+  if (itemData.imageIds && itemData.imageIds.length > 0 && imageUrlMap) {
+    const firstImageId = itemData.imageIds[0]
+    imageUrl = imageUrlMap.get(firstImageId) || ''
   }
   
   // Get price from variations
@@ -149,24 +273,39 @@ export function transformSquareItemToProduct(
     const firstVariation = itemData.variations[0]
     if (firstVariation.itemVariationData?.priceMoney) {
       const priceMoney = firstVariation.itemVariationData.priceMoney
-      // Square prices are in cents, convert to dollars
-      price = (priceMoney.amount || 0) / 100
+      // Square prices are in cents as BigInt, convert to dollars
+      if (priceMoney.amount != null) {
+        // Convert BigInt to Number before division
+        const amount = typeof priceMoney.amount === 'bigint' 
+          ? Number(priceMoney.amount) 
+          : Number(priceMoney.amount) || 0
+        price = amount / 100
+      }
     }
   }
   
-  // Get category
-  const category = itemData.categoryId || 'Uncategorized'
+  // Get category (Square uses categoryId, but we'll infer from name if needed)
+  const rawCategory = itemData.categoryId || 'Uncategorized'
   
-  return {
+  // Create base product
+  const baseProduct = {
     id: squareItem.id || '',
     name: itemData.name || 'Unnamed Item',
     description: itemData.description || '',
     price,
-    category,
+    category: rawCategory,
     stockCount: inventoryCount,
     imageUrl: imageUrl || 'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=600&q=80',
     rating: 4.5, // Default rating (Square doesn't provide ratings)
     reviewCount: 0, // Default review count
+  }
+  
+  // Enhance with inferred details using enums
+  const enhanced = enhanceProductWithInferences(baseProduct)
+  
+  return {
+    ...baseProduct,
+    ...enhanced,
   }
 }
 
@@ -175,7 +314,8 @@ export function transformSquareItemToProduct(
  */
 export async function fetchSquareProducts(config: SquareConfig): Promise<SquareProduct[]> {
   const client = createSquareClient(config)
-  const locationId = config.locationId
+  // Trim whitespace/newlines from locationId (common issue with .env files)
+  const locationId = config.locationId?.trim()
   
   if (!locationId) {
     throw new Error('Square locationId is required')
@@ -194,13 +334,30 @@ export async function fetchSquareProducts(config: SquareConfig): Promise<SquareP
       .map((item: any) => item.id)
       .filter((id: string) => id)
     
+    // Collect all image IDs from items
+    const imageIds: string[] = []
+    for (const item of catalogItems) {
+      const itemData = item.itemData || {}
+      if (itemData.imageIds && Array.isArray(itemData.imageIds)) {
+        imageIds.push(...itemData.imageIds)
+      }
+    }
+    
+    // Remove duplicates
+    const uniqueImageIds = [...new Set(imageIds)]
+    console.log(`[SquareAdapter] Found ${uniqueImageIds.length} image IDs (${uniqueImageIds.length} unique)`)
+    
+    // Fetch image URLs
+    const imageUrlMap = await fetchSquareImageUrls(client, uniqueImageIds)
+    console.log(`[SquareAdapter] Fetched ${imageUrlMap.size} image URLs`)
+    
     // Fetch inventory counts
     const inventoryMap = await fetchSquareInventory(client, catalogObjectIds, locationId)
     
     // Transform to app format
     const products = catalogItems.map((item: any) => {
       const inventoryCount = inventoryMap.get(item.id) || 0
-      return transformSquareItemToProduct(item, inventoryCount)
+      return transformSquareItemToProduct(item, inventoryCount, imageUrlMap)
     })
     
     return products
@@ -218,7 +375,8 @@ export async function fetchSquareProductById(
   productId: string,
 ): Promise<SquareProduct | null> {
   const client = createSquareClient(config)
-  const locationId = config.locationId
+  // Trim whitespace/newlines from locationId (common issue with .env files)
+  const locationId = config.locationId?.trim()
   
   if (!locationId) {
     throw new Error('Square locationId is required')
@@ -233,9 +391,19 @@ export async function fetchSquareProductById(
     
     if (response.result?.objects && response.result.objects.length > 0) {
       const object = response.result.objects[0]
+      
+      // Get image IDs from the item
+      const itemData = object.itemData || {}
+      const imageIds = itemData.imageIds || []
+      
+      // Fetch image URLs
+      const imageUrlMap = await fetchSquareImageUrls(client, imageIds)
+      
+      // Fetch inventory
       const inventoryMap = await fetchSquareInventory(client, [productId], locationId)
       const inventoryCount = inventoryMap.get(productId) || 0
-      return transformSquareItemToProduct(object, inventoryCount)
+      
+      return transformSquareItemToProduct(object, inventoryCount, imageUrlMap)
     }
     
     return null

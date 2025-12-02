@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Product } from '../dataAdapter'
 import { sanitizeText } from '../utils/sanitize'
+import { moneyFormatter } from '../formatters'
 
 type SearchOverlayProps = {
   products: Product[]
@@ -17,6 +19,7 @@ export function SearchOverlay({
   onClose,
   onSelect,
 }: SearchOverlayProps) {
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
 
   useEffect(() => {
@@ -102,26 +105,29 @@ export function SearchOverlay({
             {filtered.map((product) => (
               <button
                 key={product.id}
-                className="flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-primary/60"
+                className="flex w-full items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-primary/60"
                 onClick={() => {
-                  onSelect(product)
                   onClose()
+                  navigate(`/product/${product.id}`)
                 }}
               >
-                <img
-                  src={product.imageUrl}
-                  alt={product.name}
-                  className="h-16 w-16 rounded-2xl object-cover"
-                />
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white">{product.name}</p>
-                  <p className="text-xs text-slate-400 line-clamp-1">
+                  <p className="text-xs text-slate-400 line-clamp-1 mt-1">
                     {product.description}
                   </p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-secondary mt-2">
+                    {product.category}
+                  </p>
                 </div>
-                <p className="text-xs uppercase tracking-[0.3em] text-secondary">
-                  {product.category}
-                </p>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-semibold text-white">{moneyFormatter.format(product.price)}</p>
+                  {product.stockCount > 0 ? (
+                    <p className="text-xs text-slate-400 mt-1">{product.stockCount} in stock</p>
+                  ) : (
+                    <p className="text-xs text-secondary mt-1">Out of stock</p>
+                  )}
+                </div>
               </button>
             ))}
           </div>

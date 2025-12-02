@@ -1,9 +1,10 @@
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
 import { Header } from './Header'
 import { Footer } from './Footer'
+import { Pagination } from './Pagination'
 
 type ClearancePageProps = {
   user: any
@@ -64,8 +65,7 @@ export function ClearancePage({
   const navigate = useNavigate()
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [sortBy, setSortBy] = useState<'featured' | 'priceAsc' | 'priceDesc'>('featured')
-  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
-  const infiniteSentinelRef = useRef<HTMLDivElement>(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Filter products that are on clearance (low stock)
   const clearanceProducts = useMemo(() => {
@@ -97,7 +97,16 @@ export function ClearancePage({
     return filtered
   }, [clearanceProducts, selectedCategory, sortBy])
 
-  const displayProducts = filteredProducts.slice(0, visibleCount)
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredProducts.length / BATCH_SIZE)
+  const startIndex = (currentPage - 1) * BATCH_SIZE
+  const endIndex = startIndex + BATCH_SIZE
+  const displayProducts = filteredProducts.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedCategory, sortBy])
 
   // Get wishlist from localStorage for checking if products are saved
   const effectiveWishlist = useMemo(() => {
@@ -157,7 +166,7 @@ export function ClearancePage({
                 }`}
                 onClick={() => {
                   setSelectedCategory(category)
-                  setVisibleCount(BATCH_SIZE)
+                  setCurrentPage(1)
                 }}
               >
                 {category}
@@ -170,7 +179,7 @@ export function ClearancePage({
               value={sortBy}
               onChange={(event) => {
                 setSortBy(event.target.value as typeof sortBy)
-                setVisibleCount(BATCH_SIZE)
+                setCurrentPage(1)
               }}
               className="rounded-full border border-white/20 bg-transparent px-4 py-2 text-sm text-white focus:outline-none"
             >
@@ -280,21 +289,14 @@ export function ClearancePage({
                 </article>
               ))}
             </div>
-            <div ref={infiniteSentinelRef} />
-            {visibleCount < filteredProducts.length ? (
-              <div className="text-center">
-                <button
-                  className="rounded-full border border-white/20 px-6 py-2 text-sm text-white/80 hover:border-white/40"
-                  onClick={() =>
-                    setVisibleCount((prev) =>
-                      Math.min(prev + BATCH_SIZE, filteredProducts.length),
-                    )
-                  }
-                >
-                  Load more
-                </button>
-              </div>
-            ) : null}
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                className="mt-8"
+              />
+            )}
           </>
         ) : (
           <div className="rounded-2xl border border-dashed border-white/20 p-12 text-center">
@@ -306,7 +308,7 @@ export function ClearancePage({
               className="mt-4 rounded-full border border-white/20 px-6 py-2 text-sm text-white/80 hover:border-white/40"
               onClick={() => {
                 setSelectedCategory('All')
-                setVisibleCount(BATCH_SIZE)
+                setCurrentPage(1)
               }}
             >
               View all products

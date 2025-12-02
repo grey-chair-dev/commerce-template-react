@@ -49,8 +49,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       locationId,
     }
 
+    console.log('[Square API] Fetching products with config:', {
+      environment,
+      locationId,
+      hasAccessToken: !!accessToken,
+    })
+
     // Fetch products from Square
     const products = await fetchSquareProducts(config)
+
+    console.log('[Square API] Fetched products:', {
+      count: products.length,
+      productIds: products.map(p => p.id),
+    })
 
     // Return products in the format expected by the app
     return res.status(200).json({
@@ -63,6 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({
       error: 'Failed to fetch products from Square',
       message: error.message || 'Unknown error',
+      details: error.stack,
     })
   }
 }

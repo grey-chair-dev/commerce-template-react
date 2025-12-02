@@ -20,10 +20,26 @@
     "maintenance:add": "node scripts/maintenance-toggle.mjs add",
     "maintenance:delete": "node scripts/maintenance-toggle.mjs delete",
     "client:generate-hash": "node scripts/generate-client-password-hash.mjs",
-    "client:generate-secret": "node scripts/generate-auth-secret.mjs"
+    "client:generate-secret": "node scripts/generate-auth-secret.mjs",
+    "cache:setup": "node scripts/setup-cache.mjs",
+    "db:inspect": "node scripts/inspect-db.mjs",
+    "db:load-square": "node scripts/load-square-to-db.mjs",
+    "db:sync-square-items": "node scripts/sync-cache-to-square-item.mjs",
+    "db:sync-product-details": "node scripts/sync-product-details.mjs",
+    "db:show-tables": "node scripts/show-all-tables.mjs",
+    "db:schema": "node scripts/get-schema.mjs",
+    "db:reset": "node scripts/reset-database.mjs",
+    "etl:populate-time": "node scripts/populate-time-dimension.mjs",
+    "etl:sync": "node scripts/etl-sync-star-schema.mjs",
+    "test:discogs": "node scripts/test-discogs.mjs",
+    "test:webhook": "node scripts/test-webhook.mjs",
+    "ngrok": "node scripts/start-ngrok.mjs"
   },
   "dependencies": {
     "@neondatabase/neon-auth": "^0.1.0-alpha.3",
+    "@neondatabase/serverless": "^1.0.2",
+    "@vercel/edge": "^1.2.2",
+    "@vercel/kv": "^3.0.0",
     "bcryptjs": "^3.0.3",
     "jose": "^6.1.2",
     "react": "^19.2.0",
@@ -48,6 +64,6 @@
     "tailwindcss": "^3.4.14",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^6.0.0"
   }
 }

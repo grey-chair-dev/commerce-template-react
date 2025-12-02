@@ -1,0 +1,98 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/wp-login.php",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/wp-admin",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/wp-admin/(.*)",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/xmlrpc.php",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/wp-content/(.*)",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/wp-includes/(.*)",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/admin.php",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/administrator",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/phpmyadmin",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/.git/(.*)",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/.env",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/filemanager.php",
+      "destination": "/",
+      "statusCode": 403
+    },
+    {
+      "source": "/tinyfilemanager",
+      "destination": "/",
+      "statusCode": 403
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!api|_next|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
