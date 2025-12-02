@@ -169,7 +169,7 @@ export function ShippingReturnsPage({
                   </p>
                 </div>
               </div>
-            </div>
+              </div>
             </section>
           )}
 
@@ -342,6 +342,7 @@ export function ShippingReturnsPage({
               </a>
             </div>
           </section>
+        </div>
         </div>
       </main>
 
