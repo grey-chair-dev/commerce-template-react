@@ -98,7 +98,7 @@ export function ShippingReturnsPage({
             <section className="space-y-6">
               <h2 className="text-2xl font-semibold">Shipping Information</h2>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
               <h3 className="mb-4 text-lg font-semibold">Shipping Options</h3>
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
@@ -135,9 +135,9 @@ export function ShippingReturnsPage({
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
               <h3 className="mb-4 text-lg font-semibold">Shipping Timeline</h3>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
