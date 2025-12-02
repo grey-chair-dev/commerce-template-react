@@ -45,11 +45,13 @@ export async function getCachedProducts(appId: string = 'spiralgroove'): Promise
       LIMIT 1
     `
     
-    if (result.length === 0) {
+    // Type guard for array result
+    const rows = Array.isArray(result) ? result : []
+    if (rows.length === 0) {
       return null
     }
     
-    const row = result[0]
+    const row = rows[0]
     const value = row.value as CacheValue
     
     // Enhance products with inferred category, format, and status using enums
@@ -82,13 +84,13 @@ export async function getCachedProducts(appId: string = 'spiralgroove'): Promise
     console.error('[Cache Service] Error reading from cache:', error)
     
     // Provide helpful error message if table doesn't exist
-    if (error?.message?.includes('does not exist') || error?.message?.includes('relation')) {
-      const helpfulError = new Error(
-        'product_cache table does not exist. Please create it first. See QUICK_SETUP_CACHE.md'
-      )
-      helpfulError.cause = error
-      throw helpfulError
-    }
+          if (error?.message?.includes('does not exist') || error?.message?.includes('relation')) {
+            const helpfulError: Error & { cause?: unknown } = new Error(
+              'product_cache table does not exist. Please create it first. See QUICK_SETUP_CACHE.md'
+            )
+            helpfulError.cause = error
+            throw helpfulError
+          }
     
     throw error
   }
@@ -125,16 +127,16 @@ export async function setCachedProducts(
     console.error('[Cache Service] Error writing to cache:', error)
     
     // Provide helpful error message if table doesn't exist
-    if (error?.message?.includes('does not exist') || error?.message?.includes('relation')) {
-      const helpfulError = new Error(
-        'product_cache table does not exist. Please run the migration:\n' +
-        '1. Go to https://console.neon.tech\n' +
-        '2. Open SQL Editor\n' +
-        '3. Run: CREATE TABLE IF NOT EXISTS product_cache (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW());'
-      )
-      helpfulError.cause = error
-      throw helpfulError
-    }
+          if (error?.message?.includes('does not exist') || error?.message?.includes('relation')) {
+            const helpfulError: Error & { cause?: unknown } = new Error(
+              'product_cache table does not exist. Please run the migration:\n' +
+              '1. Go to https://console.neon.tech\n' +
+              '2. Open SQL Editor\n' +
+              '3. Run: CREATE TABLE IF NOT EXISTS product_cache (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW());'
+            )
+            helpfulError.cause = error
+            throw helpfulError
+          }
     
     throw error
   }

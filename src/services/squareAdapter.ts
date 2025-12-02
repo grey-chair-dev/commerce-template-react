@@ -169,9 +169,11 @@ export async function fetchSquareInventory(
       
       // Iterate through paginated results
       for await (const page of response) {
-        if (page.result?.counts) {
+        // The page might have counts directly or in result.counts
+        const counts = (page as any).result?.counts || (page as any).counts || []
+        if (counts && counts.length > 0) {
           // Group counts by catalog object ID
-          for (const count of page.result.counts) {
+          for (const count of counts) {
             const catalogObjectId = count.catalogObjectId
             if (catalogObjectId) {
               const currentCount = inventoryMap.get(catalogObjectId) || 0
@@ -233,8 +235,10 @@ export async function fetchSquareImageUrls(
         includeRelatedObjects: false,
       })
 
-      if (response.result?.objects) {
-        for (const obj of response.result.objects) {
+      // Response might have objects directly or in result.objects
+      const objects = (response as any).result?.objects || (response as any).objects || []
+      if (objects && objects.length > 0) {
+        for (const obj of objects) {
           if (obj.type === 'IMAGE' && obj.imageData?.url) {
             imageMap.set(obj.id, obj.imageData.url)
           }
@@ -389,8 +393,10 @@ export async function fetchSquareProductById(
       includeRelatedObjects: true,
     })
     
-    if (response.result?.objects && response.result.objects.length > 0) {
-      const object = response.result.objects[0]
+    // Response might have objects directly or in result.objects
+    const objects = (response as any).result?.objects || (response as any).objects || []
+    if (objects && objects.length > 0) {
+      const object = objects[0]
       
       // Get image IDs from the item
       const itemData = object.itemData || {}

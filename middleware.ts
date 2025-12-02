@@ -107,7 +107,9 @@ const BLOCKED_USER_AGENTS = [
 ]
 
 export default function middleware(request: Request) {
-  const url = new URL(request.url)
+  // In Vercel Edge runtime, request.url is available
+  const urlString = request.url || (request as any).nextUrl?.href || ''
+  const url = new URL(urlString)
   const pathname = url.pathname
   const userAgent = request.headers.get('user-agent') || ''
 
