@@ -74,23 +74,23 @@ export function ShippingReturnsPage({
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
           {/* Header */}
           <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">
-              {isPickupOnly ? 'Returns Policy' : 'Shipping & Returns'}
-            </h1>
-            <p className="mt-2 text-sm text-slate-400">
-              {isPickupOnly
-                ? 'Everything you need to know about returns'
-                : 'Everything you need to know about shipping and returns'}
-            </p>
+            <div>
+              <h1 className="text-3xl font-semibold">
+                {isPickupOnly ? 'Returns Policy' : 'Shipping & Returns'}
+              </h1>
+              <p className="mt-2 text-sm text-slate-400">
+                {isPickupOnly
+                  ? 'Everything you need to know about returns'
+                  : 'Everything you need to know about shipping and returns'}
+              </p>
+            </div>
+            <button
+              className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/80 hover:border-white/40"
+              onClick={() => navigate('/')}
+            >
+              Close
+            </button>
           </div>
-          <button
-            className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/80 hover:border-white/40"
-            onClick={() => navigate('/')}
-          >
-            Close
-          </button>
-        </div>
 
         <div className="flex flex-1 flex-col gap-8">
           {/* Shipping Section - Only show if not pickup-only */}
