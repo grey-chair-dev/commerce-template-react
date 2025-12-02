@@ -103,8 +103,9 @@ export function PrivacyTermsPage({
         onProductSelect={onProductSelect}
       />
 
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-32 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-44 sm:pb-10 md:pt-56 lg:pt-60 lg:px-8">
         <div className="mx-auto flex w-full max-w-5xl gap-8">
-        {/* Sticky Table of Contents Sidebar */}
+          {/* Sticky Table of Contents Sidebar */}
         <aside className="hidden w-64 flex-shrink-0 lg:block">
           <div className="sticky top-8 rounded-2xl border border-white/10 bg-white/5 p-6">
             <h2 className="mb-4 text-sm font-semibold text-white">Table of Contents</h2>
@@ -425,7 +426,6 @@ export function PrivacyTermsPage({
               </>
             )}
           </div>
-        </div>
         </div>
       </main>
 

@@ -149,6 +149,7 @@ export function CatalogPage({
         onProductSelect={onProductSelect}
       />
 
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-32 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-44 sm:pb-10 md:pt-56 lg:pt-60 lg:px-8">
         {/* Page Header */}
         <div className="space-y-3 sm:space-y-4">
           <h1 className="text-2xl font-semibold leading-tight text-text sm:text-4xl lg:text-5xl">
