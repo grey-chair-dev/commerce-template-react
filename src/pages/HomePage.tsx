@@ -111,11 +111,6 @@ export function HomePage({
   const effectiveWishlist = wishlistFeatureEnabled ? wishlist : []
 
   return (
-<<<<<<< HEAD
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 pt-32 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-44 sm:pb-10 md:pt-56 lg:pt-60 lg:px-8">
-=======
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-8 text-text sm:gap-8 sm:px-8 sm:py-12 lg:px-12 lg:py-16">
->>>>>>> aba70b3a637a56e82f7ca9c21200a91188d65a9d
       <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-4 shadow-brand sm:rounded-3xl sm:p-6 lg:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-3 sm:space-y-4">

@@ -67,11 +67,6 @@ export function NotFoundPage({
         onProductSelect={onProductSelect}
       />
 
-<<<<<<< HEAD
-      <main className="flex flex-1 flex-col items-center justify-center px-4 pt-32 pb-16 text-center sm:pt-44 md:pt-56 lg:pt-60">
-=======
-      <main className="flex flex-1 flex-col items-center justify-center px-4 pt-36 pb-16 text-center sm:pt-44 md:pt-56">
->>>>>>> aba70b3a637a56e82f7ca9c21200a91188d65a9d
         <div className="max-w-2xl space-y-8">
         {/* 404 Heading */}
         <div className="space-y-4">

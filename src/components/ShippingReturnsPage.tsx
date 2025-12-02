@@ -70,11 +70,7 @@ export function ShippingReturnsPage({
         onProductSelect={onProductSelect}
       />
 
-<<<<<<< HEAD
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-32 pb-10 text-text sm:px-6 sm:pt-44 md:pt-56 lg:pt-60 lg:px-8">
-=======
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-36 pb-10 text-text sm:px-6 sm:pt-44 md:pt-56 lg:px-8">
->>>>>>> aba70b3a637a56e82f7ca9c21200a91188d65a9d
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-32 pb-6 text-text sm:gap-8 sm:px-6 sm:pt-44 sm:pb-10 md:pt-56 lg:pt-60 lg:px-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
           {/* Header */}
           <div className="mb-8 flex items-center justify-between">
@@ -346,7 +342,6 @@ export function ShippingReturnsPage({
               </a>
             </div>
           </section>
-        </div>
         </div>
       </main>
 
