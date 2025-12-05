@@ -67,7 +67,7 @@ export function Layout({
         onSearch={onSearch}
         onProductSelect={onProductSelect}
       />
-      <div className="pt-24 sm:pt-32 md:pt-44">
+      <div className="pt-40 sm:pt-48 md:pt-56">
       {children}
       </div>
       <Footer

@@ -654,7 +654,7 @@ function App() {
                 onProductSelect={(product) => setPdpProduct(product)}
               />
 
-              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
+              <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-12 px-4 pt-40 pb-10 text-text sm:px-6 sm:pt-48 md:pt-56 lg:px-8">
                 {/* Hero Section */}
                 <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/20 via-white/10 to-secondary/10 p-8 lg:p-12 shadow-brand">
                   <div className="relative z-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">

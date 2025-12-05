@@ -210,7 +210,7 @@ export function FAQPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-4 pt-40 pb-10 text-text sm:px-6 sm:pt-48 md:pt-56 lg:px-8">
         {/* Page Header */}
         <div className="space-y-4 text-center">
           <h1 className="text-4xl font-semibold leading-tight text-text sm:text-5xl">

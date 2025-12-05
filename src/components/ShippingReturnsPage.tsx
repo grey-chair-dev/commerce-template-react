@@ -70,7 +70,7 @@ export function ShippingReturnsPage({
         onProductSelect={onProductSelect}
       />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-24 pb-10 text-text sm:px-6 sm:pt-32 md:pt-44 lg:px-8">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 pt-40 pb-10 text-text sm:px-6 sm:pt-48 md:pt-56 lg:px-8">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-8">
           {/* Header */}
           <div className="mb-8 flex items-center justify-between">
