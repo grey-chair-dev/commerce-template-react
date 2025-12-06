@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
+import { assembleCheckoutPayload, type ShippingForm as CheckoutShippingForm } from '../utils/checkoutPayload'
 
 export type CartItem = Product & { quantity: number }
 
@@ -11,16 +12,7 @@ type PaymentForm = {
   cardholderName: string
 }
 
-type ShippingForm = {
-  email: string
-  firstName: string
-  lastName: string
-  address: string
-  city: string
-  state: string
-  zipCode: string
-  phone: string
-}
+type ShippingForm = CheckoutShippingForm
 
 type CheckoutReviewPageProps = {
   cartItems: CartItem[]
@@ -29,8 +21,9 @@ type CheckoutReviewPageProps = {
   cartSubtotal: number
   estimatedShipping: number
   estimatedTax: number
+  customerId?: string | null
   onBack: () => void
-  onComplete: () => void
+  onComplete: (payload?: ReturnType<typeof assembleCheckoutPayload>) => void
   onCancel: () => void
 }
 
@@ -41,6 +34,7 @@ export function CheckoutReviewPage({
   cartSubtotal,
   estimatedShipping,
   estimatedTax,
+  customerId = null,
   onBack,
   onComplete,
   onCancel,
@@ -52,10 +46,30 @@ export function CheckoutReviewPage({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsProcessing(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsProcessing(false)
-    onComplete()
+    
+    try {
+      // Assemble checkout payload
+      const checkoutPayload = assembleCheckoutPayload(
+        cartItems,
+        shippingForm,
+        cartSubtotal,
+        estimatedShipping,
+        estimatedTax,
+        customerId || null,
+      )
+
+      // Log payload for debugging (remove in production or use proper logging)
+      console.log('[Checkout] Assembled payload:', checkoutPayload)
+      
+      // Pass payload to onComplete handler - parent will handle API call
+      setIsProcessing(false)
+      onComplete(checkoutPayload)
+    } catch (error) {
+      console.error('[Checkout] Error assembling payload:', error)
+      setIsProcessing(false)
+      // Still call onComplete to allow error handling in parent
+      onComplete(undefined)
+    }
   }
 
   const steps = [
