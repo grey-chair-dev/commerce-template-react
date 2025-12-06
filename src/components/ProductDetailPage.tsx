@@ -235,7 +235,11 @@ export function ProductDetailPage({
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:rounded-3xl sm:p-6">
               <div className="flex items-baseline justify-between mb-4">
-                <span className="text-2xl font-bold text-white sm:text-3xl">
+                <span className={`text-2xl font-bold sm:text-3xl ${
+                  product.stockCount > 0 
+                    ? 'text-white' 
+                    : 'text-slate-500 line-through opacity-50'
+                }`}>
                   {moneyFormatter.format(product.price)}
                 </span>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">
@@ -258,7 +262,7 @@ export function ProductDetailPage({
                     >
                       {product.stockCount > 0
                         ? `${product.stockCount} ${product.stockCount === 1 ? 'unit' : 'units'} in stock`
-                        : 'Out of stock'}
+                        : 'Sold Out'}
                     </span>
                   </div>
                   {product.stockCount > 0 && (
@@ -324,10 +328,10 @@ export function ProductDetailPage({
                     </>
                   ) : (
                     <button
-                      className="w-full rounded-full border border-white/20 px-6 py-3.5 text-sm font-semibold text-white/50 cursor-not-allowed min-h-[44px] sm:py-4 sm:text-base"
+                      className="w-full rounded-full bg-slate-700/50 px-6 py-3.5 text-sm font-semibold text-slate-500 cursor-not-allowed min-h-[44px] sm:py-4 sm:text-base"
                       disabled
                     >
-                      Out of stock
+                      Sold Out
                     </button>
                   )}
                 </div>
