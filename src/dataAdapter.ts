@@ -1,15 +1,36 @@
 import { sanitizeText } from './utils/sanitize'
+import type { 
+  RecordFormat, 
+  RecordCondition, 
+  ProductCategory, 
+  ProductStatus,
+  StaffPickStatus 
+} from './types/productEnums'
+
+export type Track = {
+  position: string  // "A1", "B1", "1", etc.
+  title: string
+  duration?: string
+}
 
 export type Product = {
   id: string
   name: string
   description: string
   price: number
-  category: string
+  category: string | ProductCategory  // Can be enum or string
   stockCount: number
   imageUrl: string
   rating: number
   reviewCount: number
+  tracklist?: Track[]  // Track listing from Discogs
+  // Extended product details (optional, from Product_Detail table)
+  format?: RecordFormat | string
+  conditionSleeve?: RecordCondition | string
+  conditionMedia?: RecordCondition | string
+  isStaffPick?: boolean
+  staffPickStatus?: StaffPickStatus
+  status?: ProductStatus
 }
 
 export type ProductSnapshotHandler = (products: Product[]) => void
@@ -82,8 +103,10 @@ const PLACEHOLDER_IMAGE =
 const MAX_RETRIES = Number(import.meta.env.VITE_WS_MAX_RETRIES ?? 5)
 const BACKOFF_BASE_MS = Number(import.meta.env.VITE_WS_BACKOFF_BASE_MS ?? 1000)
 const BACKOFF_CAP_MS = Number(import.meta.env.VITE_WS_BACKOFF_CAP_MS ?? 30000)
+// Default to 5 minutes (300000ms) - webhooks handle instant updates, polling is just a safety net
+// Can be overridden with VITE_SNAPSHOT_POLL_INTERVAL_MS environment variable
 const SNAPSHOT_POLL_INTERVAL_MS = Number(
-  import.meta.env.VITE_SNAPSHOT_POLL_INTERVAL_MS ?? 30000,
+  import.meta.env.VITE_SNAPSHOT_POLL_INTERVAL_MS ?? 300000,
 )
 
 const cachedProducts = new Map<string, Product>()
@@ -115,7 +138,7 @@ export function subscribeToProducts(
   if (!wsUrl) {
     if (snapshotUrl) {
       notifyMode('snapshot')
-      return startSnapshotFallback(appId, snapshotUrl, onSnapshot)
+      return startSnapshotFallback(appId, snapshotUrl, onSnapshot, mockEnabled, notifyMode)
     }
     if (mockEnabled) {
       notifyMode('mock')
@@ -415,18 +438,26 @@ function startSnapshotFallback(
   appId: string,
   snapshotUrl: string,
   onSnapshot: ProductSnapshotHandler,
+  mockEnabled: boolean = false,
+  notifyMode?: (mode: ConnectionMode) => void,
 ): () => void {
   if (typeof window === 'undefined') {
     fetchProductSnapshot(appId, { resolvedUrl: snapshotUrl })
       .then(onSnapshot)
       .catch((error) => {
         console.error('[dataAdapter] Snapshot fallback failed', error)
+        if (mockEnabled) {
+          notifyMode?.('mock')
+          onSnapshot(sanitizeBatch(FALLBACK_PRODUCTS))
+        }
       })
     return () => undefined
   }
 
   let cancelled = false
   let timer: number | null = null
+  let mockCleanup: (() => void) | null = null
+  let hasReceivedData = false
 
   const poll = async () => {
     try {
@@ -434,10 +465,22 @@ function startSnapshotFallback(
         resolvedUrl: snapshotUrl,
       })
       if (!cancelled) {
+        hasReceivedData = true
         onSnapshot(products)
+        // Clear any mock data if we got real data
+        if (mockCleanup) {
+          mockCleanup()
+          mockCleanup = null
+        }
       }
     } catch (error) {
       console.error('[dataAdapter] Snapshot poll failed', error)
+      // If we haven't received any data yet and mock is enabled, use mock data
+      if (!hasReceivedData && mockEnabled && !mockCleanup) {
+        console.warn('[dataAdapter] API unavailable, using mock data')
+        notifyMode?.('mock')
+        mockCleanup = createMockRealtimeFeed(onSnapshot)
+      }
     }
 
     if (!cancelled) {
@@ -445,12 +488,16 @@ function startSnapshotFallback(
     }
   }
 
+  // Try immediately first
   poll()
 
   return () => {
     cancelled = true
     if (timer) {
       window.clearTimeout(timer)
+    }
+    if (mockCleanup) {
+      mockCleanup()
     }
   }
 }
@@ -470,6 +517,12 @@ function resolveSnapshotUrl(appId: string): string | null {
     .replace('{appId}', encodeURIComponent(appId))
 
   try {
+    // If URL is already absolute (starts with http:// or https://), use it as-is
+    if (tokenized.startsWith('http://') || tokenized.startsWith('https://')) {
+      return tokenized
+    }
+    
+    // Otherwise, resolve relative to current origin
     return new URL(
       tokenized,
       typeof window === 'undefined' ? 'http://localhost' : window.location.origin,

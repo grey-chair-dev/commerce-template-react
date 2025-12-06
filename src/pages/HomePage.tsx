@@ -1,8 +1,9 @@
-import { type ReactNode, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { featureFlags, siteConfig } from '../config'
 import type { Product, ConnectionMode } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
+import { Pagination } from '../components/Pagination'
 
 type HomePageProps = {
   products: Product[]
@@ -54,8 +55,7 @@ export function HomePage({
   const navigate = useNavigate()
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [sortBy, setSortBy] = useState<'featured' | 'priceAsc' | 'priceDesc'>('featured')
-  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
-  const infiniteSentinelRef = useRef<HTMLDivElement>(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const categories = useMemo(() => {
     const cats = new Set<string>(['All'])
@@ -81,7 +81,16 @@ export function HomePage({
     return filtered
   }, [products, selectedCategory, sortBy])
 
-  const displayProducts = filteredProducts.slice(0, visibleCount)
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredProducts.length / BATCH_SIZE)
+  const startIndex = (currentPage - 1) * BATCH_SIZE
+  const endIndex = startIndex + BATCH_SIZE
+  const displayProducts = filteredProducts.slice(startIndex, endIndex)
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedCategory, sortBy])
 
   const adapterHealthLabel =
     adapterHealth === 'healthy'
@@ -102,7 +111,6 @@ export function HomePage({
   const effectiveWishlist = wishlistFeatureEnabled ? wishlist : []
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 text-text sm:gap-8 sm:px-6 sm:py-10 lg:px-8">
       <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-4 shadow-brand sm:rounded-3xl sm:p-6 lg:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-3 sm:space-y-4">
@@ -167,7 +175,7 @@ export function HomePage({
       </section>
 
       <SectionShell
-        title="Product catalog"
+        title="Shop Vinyl Records"
         description="Backed by the mandated onSnapshot adapter subscribed to /artifacts/{appId}/public/data/products."
       >
         {/* Mobile: Hours and CTA */}
@@ -178,7 +186,7 @@ export function HomePage({
               <p className="text-sm font-semibold text-white mt-1">{siteConfig.contact.hours}</p>
             </div>
             <button
-              onClick={() => navigate('/catalog')}
+              onClick={() => navigate('/shop')}
               className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-brand hover:bg-primary/80 min-h-[44px] whitespace-nowrap"
             >
               {siteConfig.hero.primaryCta}
@@ -197,7 +205,10 @@ export function HomePage({
                     ? 'border-primary bg-primary/20 text-white'
                     : 'border-white/10 text-slate-300 hover:border-white/30'
                 }`}
-                onClick={() => setSelectedCategory(category)}
+                onClick={() => {
+                  setSelectedCategory(category)
+                  setCurrentPage(1)
+                }}
               >
                 {category}
               </button>
@@ -207,7 +218,10 @@ export function HomePage({
             <label className="text-xs uppercase tracking-[0.3em]">Sort</label>
             <select
               value={sortBy}
-              onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+              onChange={(event) => {
+                setSortBy(event.target.value as typeof sortBy)
+                setCurrentPage(1)
+              }}
               className="rounded-full border border-white/20 bg-transparent px-3 py-2 text-sm text-white focus:outline-none min-h-[44px] sm:px-4"
             >
               <option value="featured">Inventory (desc)</option>
@@ -328,21 +342,14 @@ export function HomePage({
             </article>
           ))}
         </div>
-        <div ref={infiniteSentinelRef} />
-        {visibleCount < filteredProducts.length ? (
-          <div className="mt-6 text-center">
-            <button
-              className="rounded-full border border-white/20 px-6 py-2 text-sm text-white/80 hover:border-white/40"
-              onClick={() =>
-                setVisibleCount((prev) =>
-                  Math.min(prev + BATCH_SIZE, filteredProducts.length),
-                )
-              }
-            >
-              Load more
-            </button>
-          </div>
-        ) : null}
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            className="mt-8"
+          />
+        )}
         {filteredProducts.length === 0 ? (
           <div className="mt-6 rounded-2xl border border-dashed border-white/20 p-6 text-center text-sm text-slate-400">
             No products found for "{selectedCategory}". Adjust your filters to see the live catalog

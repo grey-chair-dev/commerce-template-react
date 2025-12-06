@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /login
+Disallow: /signup
+
+Sitemap: https://spiralgroove.com/sitemap.xml
+
