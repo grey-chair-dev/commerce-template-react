@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Product } from '../dataAdapter'
 import { sanitizeText } from '../utils/sanitize'
 import { moneyFormatter } from '../formatters'
@@ -18,6 +19,8 @@ export function SearchDropdown({
   onSelect,
   onClose,
 }: SearchDropdownProps) {
+  const navigate = useNavigate()
+  
   const filtered = useMemo(() => {
     if (!query.trim()) {
       return []
@@ -45,21 +48,16 @@ export function SearchDropdown({
           <button
             key={product.id}
             onClick={() => {
-              onSelect(product)
               onClose()
+              navigate(`/product/${product.id}`)
             }}
-            className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10"
+            className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10"
           >
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="h-12 w-12 rounded-lg object-cover"
-            />
-            <div className="flex-1">
-              <p className="font-semibold text-white">{product.name}</p>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-white truncate">{product.name}</p>
               <p className="text-xs text-slate-400">{product.category}</p>
             </div>
-            <div className="text-right">
+            <div className="text-right flex-shrink-0">
               <p className="font-semibold text-white">{moneyFormatter.format(product.price)}</p>
               {product.stockCount > 0 ? (
                 <p className="text-xs text-slate-400">{product.stockCount} in stock</p>
