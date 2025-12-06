@@ -7,6 +7,14 @@
     "api/webhooks/square-order-paid.js": {
       "memory": 512,
       "maxDuration": 30
+    },
+    "api/catalog/products.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/checkout/create.js": {
+      "memory": 512,
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -18,10 +26,14 @@
       "source": "/api/webhooks/square-order-paid",
       "destination": "/api/webhooks/square-order-paid.js"
     },
-    {
-      "source": "/api/catalog/products",
-      "destination": "/api/catalog/products.js"
-    }
+            {
+              "source": "/api/catalog/products",
+              "destination": "/api/catalog/products.js"
+            },
+            {
+              "source": "/api/checkout/create",
+              "destination": "/api/checkout/create.js"
+            }
   ]
 }
 

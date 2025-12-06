@@ -296,8 +296,8 @@ export function CatalogPage({
                           product.stockCount === 0
                             ? 'font-semibold text-slate-500'
                             : product.stockCount <= 5
-                              ? 'font-semibold text-secondary'
-                              : 'font-semibold text-accent'
+                            ? 'font-semibold text-secondary'
+                            : 'font-semibold text-accent'
                         }
                       >
                         {product.stockCount === 0 ? 'Sold Out' : `${product.stockCount} units`}
@@ -348,15 +348,15 @@ export function CatalogPage({
                         </button>
                       ) : null}
                       {product.stockCount > 0 ? (
-                        <button
+                      <button
                           className="w-full rounded-full bg-primary/80 px-4 py-2.5 text-xs font-semibold text-white shadow-brand hover:bg-primary min-h-[44px] transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onAddToCart(product)
-                          }}
-                        >
-                          Add to cart
-                        </button>
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onAddToCart(product)
+                        }}
+                      >
+                        Add to cart
+                      </button>
                       ) : (
                         <button
                           className="w-full rounded-full bg-slate-700/50 px-4 py-2.5 text-xs font-semibold text-slate-500 cursor-not-allowed min-h-[44px]"

@@ -144,6 +144,7 @@ function App() {
   const [isOrderLookupOpen, setOrderLookupOpen] = useState(false)
   const [isDashboardOpen, setDashboardOpen] = useState(false)
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
+  const [isProcessing, setIsProcessing] = useState(false)
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
 
   // Scroll to top on route change
@@ -1627,6 +1628,7 @@ function App() {
           cartSubtotal={cartSubtotal}
           estimatedShipping={estimatedShipping}
           estimatedTax={estimatedTax}
+          customerId={user?.id || null}
           onBack={() => {
             const checkoutMode = (import.meta.env.VITE_CHECKOUT_MODE ?? 'both').toString().toLowerCase()
             if (checkoutMode === 'pickup' || shippingForm?.deliveryMethod === 'pickup') {
@@ -1635,33 +1637,108 @@ function App() {
               setCheckoutStep('payment')
             }
           }}
-          onComplete={() => {
-            const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+          onComplete={async (checkoutPayload) => {
+            if (!checkoutPayload) {
+              console.error('[Checkout] No payload provided')
+              alert('Checkout failed. Please try again.')
+              return
+            }
+
+            setIsProcessing(true)
+
+            try {
+              // Determine API base URL (local dev vs production)
+              const isLocalDev =
+                typeof window !== 'undefined' &&
+                (window.location.hostname === 'localhost' ||
+                  window.location.hostname === '127.0.0.1')
+              const apiBaseUrl = isLocalDev
+                ? import.meta.env.VITE_API_URL || 'http://localhost:3000'
+                : typeof window !== 'undefined'
+                  ? window.location.origin
+                  : 'http://localhost:3000'
+
+              // Send checkout payload to backend
+              const response = await fetch(`${apiBaseUrl}/api/checkout/create`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(checkoutPayload),
+              })
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}))
+                throw new Error(
+                  errorData.message || `Checkout API error: ${response.status}`,
+                )
+              }
+
+            const orderResult = await response.json()
+            console.log('[Checkout] Order created successfully:', orderResult)
+
+            // Extract order details from API response
+            const orderId = orderResult.order?.id
+            const orderNumber = orderResult.order?.order_number
+            const returnUrls = orderResult.return_urls
+            const checkoutPageUrl = orderResult.checkout_page_url // Extract checkout page URL
+
+            if (!orderId || !orderNumber) {
+              throw new Error('Invalid response from checkout API')
+            }
+
+            // Store order data locally (before redirect)
             const completedOrderItems = [...cartItems]
             const completedShippingForm = { ...shippingForm }
-            
+
             const orderData = {
               orderNumber,
+              orderId, // Neon database ID
               cartItems: completedOrderItems,
               shippingForm: completedShippingForm,
               cartSubtotal,
               estimatedShipping,
               estimatedTax,
+              checkoutPayload,
+              returnUrls, // Store return URLs for Square redirect
             }
-            
+
             try {
               const storedOrders = JSON.parse(localStorage.getItem('lct_orders') || '{}')
               storedOrders[orderNumber.toLowerCase()] = orderData
               localStorage.setItem('lct_orders', JSON.stringify(storedOrders))
             } catch (e) {
-              console.error('Failed to store order', e)
+              console.error('Failed to store order locally', e)
             }
-            
+
+            // Clear checkout state
             setCheckoutStep(null)
             setCartItems([])
-            setOrderConfirmation(orderData)
             setShippingForm(null)
             setPaymentForm(null)
+
+            // Execute redirect: If Square checkout page URL is available, redirect immediately
+            if (checkoutPageUrl) {
+              console.log('[Checkout] Received checkout_page_url, redirecting to Square checkout:', checkoutPageUrl)
+              // Immediately redirect user's browser to Square checkout page
+              window.location.href = checkoutPageUrl
+              return // Exit early - don't set order confirmation yet, wait for Square redirect back
+            }
+
+            // Fallback: If no checkout URL, proceed to order confirmation
+            // This happens if Square order/checkout creation failed
+            console.warn('[Checkout] No checkout_page_url received, proceeding to order confirmation')
+            setOrderConfirmation(orderData)
+
+            } catch (error) {
+              console.error('[Checkout] Failed to create order:', error)
+              alert(
+                error instanceof Error
+                  ? error.message
+                  : 'Order creation failed. Please try again or contact support.',
+              )
+              setIsProcessing(false)
+            }
           }}
           onCancel={() => {
             setCheckoutStep(null)

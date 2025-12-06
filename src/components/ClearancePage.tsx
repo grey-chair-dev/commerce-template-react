@@ -271,15 +271,15 @@ export function ClearancePage({
                         </button>
                       ) : null}
                       {product.stockCount > 0 ? (
-                        <button
+                      <button
                           className="w-full rounded-full bg-secondary px-4 py-2 text-xs font-semibold text-white shadow-brand hover:bg-secondary/80 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onAddToCart(product)
-                          }}
-                        >
-                          Add to cart
-                        </button>
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onAddToCart(product)
+                        }}
+                      >
+                        Add to cart
+                      </button>
                       ) : (
                         <button
                           className="w-full rounded-full bg-slate-700/50 px-4 py-2 text-xs font-semibold text-slate-500 cursor-not-allowed"
