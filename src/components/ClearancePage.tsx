@@ -212,14 +212,18 @@ export function ClearancePage({
                         <p className="text-lg font-semibold text-white">{product.name}</p>
                         <p className="text-sm text-slate-400">{product.description}</p>
                       </div>
-                      <span className="text-base font-semibold text-secondary">
+                      <span className={`text-base font-semibold ${
+                        product.stockCount > 0 
+                          ? 'text-secondary' 
+                          : 'text-slate-500 line-through opacity-50'
+                      }`}>
                         {moneyFormatter.format(product.price)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-400">
                       <span>Stock</span>
-                      <span className="font-semibold text-secondary">
-                        {product.stockCount} {product.stockCount === 1 ? 'left' : 'left'}
+                      <span className={`font-semibold ${product.stockCount === 0 ? 'text-slate-500' : 'text-secondary'}`}>
+                        {product.stockCount === 0 ? 'Sold Out' : `${product.stockCount} ${product.stockCount === 1 ? 'left' : 'left'}`}
                       </span>
                     </div>
                     <div className="h-1 rounded-full bg-white/10">
@@ -266,15 +270,24 @@ export function ClearancePage({
                             : 'Save'}
                         </button>
                       ) : null}
-                      <button
-                        className="w-full rounded-full bg-secondary px-4 py-2 text-xs font-semibold text-white shadow-brand hover:bg-secondary/80"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onAddToCart(product)
-                        }}
-                      >
-                        Add to cart
-                      </button>
+                      {product.stockCount > 0 ? (
+                        <button
+                          className="w-full rounded-full bg-secondary px-4 py-2 text-xs font-semibold text-white shadow-brand hover:bg-secondary/80 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onAddToCart(product)
+                          }}
+                        >
+                          Add to cart
+                        </button>
+                      ) : (
+                        <button
+                          className="w-full rounded-full bg-slate-700/50 px-4 py-2 text-xs font-semibold text-slate-500 cursor-not-allowed"
+                          disabled
+                        >
+                          Sold Out
+                        </button>
+                      )}
                     </div>
                   </div>
                 </article>

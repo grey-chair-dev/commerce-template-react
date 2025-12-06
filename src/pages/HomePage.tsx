@@ -241,7 +241,11 @@ export function HomePage({
                     <p className="text-base font-semibold text-white sm:text-lg truncate">{product.name}</p>
                     <p className="text-xs text-slate-400 sm:text-sm line-clamp-2">{product.description}</p>
                   </div>
-                  <span className="text-sm font-semibold text-secondary flex-shrink-0 sm:text-base">
+                  <span className={`text-sm font-semibold flex-shrink-0 sm:text-base ${
+                    product.stockCount > 0 
+                      ? 'text-secondary' 
+                      : 'text-slate-500 line-through opacity-50'
+                  }`}>
                     {moneyFormatter.format(product.price)}
                   </span>
                 </div>
@@ -249,12 +253,14 @@ export function HomePage({
                   <span>Stock</span>
                   <span
                     className={
-                      product.stockCount <= 5
-                        ? 'font-semibold text-secondary'
-                        : 'font-semibold text-accent'
+                      product.stockCount === 0
+                        ? 'font-semibold text-slate-500'
+                        : product.stockCount <= 5
+                          ? 'font-semibold text-secondary'
+                          : 'font-semibold text-accent'
                     }
                   >
-                    {product.stockCount} units
+                    {product.stockCount === 0 ? 'Sold Out' : `${product.stockCount} units`}
                   </span>
                 </div>
                 <div className="h-1 rounded-full bg-white/10">
@@ -299,15 +305,24 @@ export function HomePage({
                       {effectiveWishlist.some((item) => item.id === product.id) ? 'Saved' : 'Save'}
                     </button>
                   ) : null}
-                  <button
-                    className="w-full rounded-full bg-primary/80 px-4 py-2.5 text-xs font-semibold text-white shadow-brand min-h-[44px] sm:w-full"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onAddToCart(product)
-                    }}
-                  >
-                    Add to cart
-                  </button>
+                  {product.stockCount > 0 ? (
+                    <button
+                      className="w-full rounded-full bg-primary/80 px-4 py-2.5 text-xs font-semibold text-white shadow-brand hover:bg-primary min-h-[44px] sm:w-full transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onAddToCart(product)
+                      }}
+                    >
+                      Add to cart
+                    </button>
+                  ) : (
+                    <button
+                      className="w-full rounded-full bg-slate-700/50 px-4 py-2.5 text-xs font-semibold text-slate-500 cursor-not-allowed min-h-[44px] sm:w-full"
+                      disabled
+                    >
+                      Sold Out
+                    </button>
+                  )}
                 </div>
               </div>
             </article>

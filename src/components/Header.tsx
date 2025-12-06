@@ -88,6 +88,10 @@ export function Header({
   const location = useLocation()
   const isActive = (path: string) => location.pathname === path
 
+  const handleNavClick = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }
+
   return (
     <>
       <div className="fixed top-0 left-0 right-0 z-40 w-full">
@@ -102,7 +106,7 @@ export function Header({
           {/* Top row - Mobile first layout */}
           <div className="flex items-center justify-between gap-2 py-3 sm:gap-3 sm:py-3.5 md:py-4">
             {/* Branding - Mobile first: minimal, then expand */}
-            <Link to="/" className="hover:opacity-90 transition-all duration-200 flex-shrink-0 min-w-0 group">
+            <Link to="/" onClick={handleNavClick} className="hover:opacity-90 transition-all duration-200 flex-shrink-0 min-w-0 group">
               <div className="min-w-0">
                 <p className="hidden md:block text-xs uppercase tracking-[0.3em] text-slate-400/80 mb-0.5">
                   Powered by Square · Neon · Upstash
@@ -346,7 +350,10 @@ export function Header({
               <nav className="flex flex-col gap-1">
                 <Link
                   to="/"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={() => {
+                    setIsMobileMenuOpen(false)
+                    handleNavClick()
+                  }}
                   className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
                     isActive('/') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
@@ -355,7 +362,10 @@ export function Header({
                 </Link>
                 <Link
                   to="/catalog"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={() => {
+                    setIsMobileMenuOpen(false)
+                    handleNavClick()
+                  }}
                   className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
                     isActive('/catalog') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
@@ -364,7 +374,10 @@ export function Header({
                 </Link>
                 <Link
                   to="/about"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={() => {
+                    setIsMobileMenuOpen(false)
+                    handleNavClick()
+                  }}
                   className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
                     isActive('/about') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
@@ -373,7 +386,10 @@ export function Header({
                 </Link>
                 <Link
                   to="/contact"
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={() => {
+                    setIsMobileMenuOpen(false)
+                    handleNavClick()
+                  }}
                   className={`px-4 py-3 rounded-lg text-base font-medium transition-colors min-h-[44px] flex items-center ${
                     isActive('/contact') ? 'text-primary bg-primary/10' : 'text-slate-300 hover:text-white hover:bg-white/5'
                   }`}
@@ -424,6 +440,7 @@ export function Header({
           <nav className="hidden sm:flex items-center gap-1 border-t border-white/10 py-2.5 lg:py-3">
           <Link
             to="/"
+            onClick={handleNavClick}
               className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
                 isActive('/') 
                   ? 'text-primary bg-primary/10 font-semibold' 
@@ -434,6 +451,7 @@ export function Header({
           </Link>
           <Link
             to="/catalog"
+            onClick={handleNavClick}
               className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
                 isActive('/catalog') 
                   ? 'text-primary bg-primary/10 font-semibold' 
@@ -444,6 +462,7 @@ export function Header({
           </Link>
           <Link
             to="/about"
+            onClick={handleNavClick}
               className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
                 isActive('/about') 
                   ? 'text-primary bg-primary/10 font-semibold' 
@@ -454,6 +473,7 @@ export function Header({
           </Link>
           <Link
             to="/contact"
+            onClick={handleNavClick}
               className={`text-sm font-medium transition-all px-3 py-2 rounded-lg min-h-[44px] flex items-center ${
                 isActive('/contact') 
                   ? 'text-primary bg-primary/10 font-semibold' 

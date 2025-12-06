@@ -271,6 +271,90 @@ export async function fetchProductSnapshot(
   return sanitizeBatch(payload)
 }
 
+/**
+ * Fetch products from the catalog API endpoint
+ * This uses the new /api/catalog/products endpoint
+ */
+export async function fetchProductsFromCatalog(
+  options?: {
+    signal?: AbortSignal
+    limit?: number
+    offset?: number
+    category?: string
+    inStock?: boolean
+    search?: string
+  },
+): Promise<Product[]> {
+  // Use production URL for API calls (serverless functions only work in production/vercel dev)
+  // In local dev with Vite, try to use vercel dev URL first, then fallback to production
+  const isLocalDev = typeof window !== 'undefined' && 
+                     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  
+  // Try vercel dev first (port 3000), then production URL
+  const baseUrl = isLocalDev 
+    ? import.meta.env.VITE_API_URL || 'http://localhost:3000'
+    : typeof window !== 'undefined' 
+      ? window.location.origin 
+      : 'http://localhost:5173'
+  
+  const params = new URLSearchParams()
+  if (options?.limit) params.set('limit', options.limit.toString())
+  if (options?.offset) params.set('offset', options.offset.toString())
+  if (options?.category) params.set('category', options.category)
+  if (options?.inStock !== undefined) params.set('in_stock', options.inStock.toString())
+  if (options?.search) params.set('search', options.search)
+
+  const url = `${baseUrl}/api/catalog/products${params.toString() ? `?${params.toString()}` : ''}`
+
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: options?.signal,
+    })
+
+    if (!response.ok) {
+      throw new Error(`Catalog API request failed: ${response.status}`)
+    }
+
+    // Check if response is actually JSON (not JavaScript source code)
+    const contentType = response.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Catalog API returned non-JSON response. Make sure you are using vercel dev or the deployed URL.')
+    }
+
+            const body = await response.json()
+            // API now returns a direct JSON array instead of { products: [...] }
+            const products = Array.isArray(body) ? body : (Array.isArray(body?.products) ? body.products : [])
+
+    // Transform API response to match Product type
+    // Note: Category is already mapped by the API endpoint using the lookup table
+    return sanitizeBatch(products.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description || '',
+      price: p.price || 0,
+      category: p.category || 'Uncategorized', // Already mapped by API
+      stockCount: p.stock_count || 0,
+      imageUrl: p.image_url || PLACEHOLDER_IMAGE,
+      rating: p.rating || 0,
+      reviewCount: p.review_count || 0,
+    })))
+  } catch (error) {
+    // If it's a CORS or network error, provide helpful message
+    if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+      if (isLocalDev) {
+        throw new Error('Catalog API not available. Run "vercel dev" in a separate terminal to enable the API locally, or test on the deployed URL.')
+      }
+      throw new Error('Failed to fetch products from catalog API. Check your network connection.')
+    }
+    // If it's a JSON parse error, provide a helpful message
+    if (error instanceof SyntaxError && error.message.includes('JSON')) {
+      throw new Error('Catalog API endpoint not available. Use "vercel dev" for local development or test on the deployed URL.')
+    }
+    throw error
+  }
+}
+
 export async function checkAdapterHealth(signal?: AbortSignal): Promise<boolean> {
   const healthUrl =
     import.meta.env.VITE_ADAPTER_HEALTH_URL ?? import.meta.env.ADAPTER_HEALTH_URL

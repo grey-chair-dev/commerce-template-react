@@ -82,54 +82,54 @@ const platformAppId =
 
 export const siteConfig: SiteConfig = {
   appId: import.meta.env.VITE_APP_ID ?? platformAppId ?? 'demo-local-commerce',
-  brandName: 'Harbor Market Collective',
-  tagline: 'Local goods. Local stories. Real-time availability.',
+  brandName: 'Spiral Groove Records',
+  tagline: 'Vinyl, tapes, and turntable culture. Real-time stock from the bins.',
   hero: {
-    headline: 'Local commerce that feels alive.',
+    headline: 'Analog sound for a digital city.',
     subheading:
-      'Square POS stays the origin, Neon mirrors the truth, and customers always see the latest product data.',
-    primaryCta: 'Browse Live Catalog',
-    secondaryCta: 'Talk to the team',
+      'From first pressings to dollar-bin gems, browse a live catalog that mirrors what is actually in the record crates—no guessing, no stale listings.',
+    primaryCta: 'Browse Vinyl Catalog',
+    secondaryCta: 'Visit the shop',
   },
   about: {
-    heading: 'Neighborhood-first retail',
-    body: 'The Local Commerce Template is tuned for makers and merchants that need premium digital shelves without the enterprise lift. It pulls product truth from Neon, caches responsibly with Upstash, and keeps the UI feather-light.',
+    heading: 'Independent, family-owned record store in downtown Milford',
+    body: 'Spiral Groove Records is a nostalgic and eclectic shop specializing in new and used vinyl, cassettes, CDs, and audio equipment. Located in downtown Milford, we offer a true treasure for record shopping with good variety, friendly staff, and reasonable prices. We also buy vinyl—bring in your records!',
     highlights: [
-      'Branding swap in minutes via CSS vars',
-      'Real-time catalog powered by mandated data adapter',
-      'No routing, just orchestrated sections via config',
+      'New and used vinyl records, cassettes, CDs, and audio equipment',
+      'We buy vinyl—bring in your collection',
+      'Live inventory that mirrors what\'s actually in the bins',
     ],
   },
   events: [
     {
-      title: 'First Friday Pop-up',
-      date: 'Dec 5 · 5–9 PM',
-      description: 'Live screen-printing, seasonal coffee flight, and vendor collabs.',
+      title: 'Listening Room: Late Night Jazz',
+      date: 'Fridays · 8–11 PM',
+      description: 'Dim lights, full albums. Front-to-back plays of classic and modern jazz records on our in-store system.',
     },
     {
-      title: 'Makers Studio Hours',
-      date: 'Dec 12 · 2–6 PM',
-      description: 'Drop-in coaching with resident makers + Square POS onboarding clinic.',
+      title: 'In-Store Set & Signing',
+      date: 'Monthly · Check the board',
+      description: 'Live DJ or artist set, small-batch merch, and signed copies of limited runs while they last.',
     },
   ],
   contact: {
-    phone: '(415) 555-0112',
-    email: 'hello@harbormarket.local',
-    location: '118 Grove St, San Francisco, CA',
-    hours: 'Open daily · 8a – 8p',
+    phone: '(513) 600-8018',
+    email: 'info@spiralgrooverecords.com',
+    location: '215 B Main St., Milford, OH 45150',
+    hours: 'Mon–Thu: 12pm–8pm · Fri–Sat: 12pm–9pm · Sun: 12pm–5pm',
   },
   legal: {
-    privacyUrl: 'https://commerce.local/privacy',
-    termsUrl: 'https://commerce.local/terms',
+    privacyUrl: 'https://spiralgroove.local/privacy',
+    termsUrl: 'https://spiralgroove.local/terms',
   },
   social: {
-    facebook: 'https://facebook.com/harbormarket',
-    instagram: 'https://instagram.com/harbormarket',
-    twitter: 'https://twitter.com/harbormarket',
+    facebook: 'https://facebook.com/spiralgrooverecords',
+    instagram: 'https://instagram.com/spiral_groove_records_',
+    twitter: 'https://www.tiktok.com/@spiral_groove',
   },
   promoBar: {
     enabled: true,
-    message: 'Free shipping on orders over $50 · New arrivals every week',
+    message: 'New and used vinyl · We buy records · Located in downtown Milford',
   },
 }
 

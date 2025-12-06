@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { featureFlags, siteConfig } from './config'
 import {
   subscribeToProducts,
+  fetchProductsFromCatalog,
   type Product,
   checkAdapterHealth,
   type ConnectionMode,
@@ -110,6 +111,8 @@ function App() {
     'unknown',
   )
   const [lastLatencyMs, setLastLatencyMs] = useState(0)
+  const [productsLoading, setProductsLoading] = useState(true)
+  const [productsError, setProductsError] = useState<string | null>(null)
   const [showCookieBanner, setShowCookieBanner] = useState(false)
   const [isFilterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
@@ -142,6 +145,11 @@ function App() {
   const [isDashboardOpen, setDashboardOpen] = useState(false)
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+  }, [location.pathname])
 
   // Sync auth page state with route
   useEffect(() => {
@@ -252,21 +260,74 @@ function App() {
   })
   const lastEventRef = useRef(performance.now())
 
+  // Fetch products from catalog API
   useEffect(() => {
-    const unsubscribe = subscribeToProducts(
-      siteConfig.appId,
-      (nextProducts) => {
-        const now = performance.now()
-        setProducts(nextProducts)
-        setLastLatencyMs(Math.round(now - lastEventRef.current))
-        lastEventRef.current = now
-      },
-      {
-        onChannelChange: setConnectionMode,
-      },
-    )
+    let cancelled = false
+    let timer: number | null = null
 
-    return () => unsubscribe()
+    const fetchProducts = async () => {
+      try {
+        setProductsLoading(true)
+        setProductsError(null)
+        const startTime = performance.now()
+        const products = await fetchProductsFromCatalog({ limit: 500 })
+        const now = performance.now()
+        const duration = Math.round(now - startTime)
+        
+        if (!cancelled) {
+          setProducts(products)
+          setLastLatencyMs(duration)
+          lastEventRef.current = now
+          setConnectionMode('snapshot') // Using API endpoint, not live WebSocket
+          setProductsLoading(false)
+          
+          // Log performance for monitoring
+          if (duration > 300) {
+            console.warn(`[Performance] Product fetch took ${duration}ms (target: <300ms)`)
+          } else {
+            console.log(`[Performance] Product fetch: ${duration}ms ✅`)
+          }
+        }
+      } catch (error) {
+        console.error('[App] Failed to fetch products from catalog API:', error)
+        if (!cancelled) {
+          setProductsError(error instanceof Error ? error.message : 'Failed to load products')
+          setConnectionMode('offline')
+          setProductsLoading(false)
+          // Fallback to WebSocket subscription if API fails
+          const unsubscribe = subscribeToProducts(
+            siteConfig.appId,
+            (nextProducts) => {
+              const now = performance.now()
+              setProducts(nextProducts)
+              setLastLatencyMs(Math.round(now - lastEventRef.current))
+              lastEventRef.current = now
+              setProductsError(null) // Clear error if fallback succeeds
+            },
+            {
+              onChannelChange: setConnectionMode,
+            },
+          )
+          return () => unsubscribe()
+        }
+      }
+    }
+
+    fetchProducts()
+
+    // Poll for updates every 30 seconds
+    timer = window.setInterval(() => {
+      if (!cancelled) {
+        fetchProducts()
+      }
+    }, 30000)
+
+    return () => {
+      cancelled = true
+      if (timer) {
+        window.clearTimeout(timer)
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -274,7 +335,14 @@ function App() {
     return () => teardown()
   }, [])
 
+  // Health check - only run if using WebSocket adapter, not for catalog API
   useEffect(() => {
+    // Skip health check if we're using the catalog API (connectionMode === 'snapshot')
+    // The catalog API fetch already sets adapterHealth to 'healthy' on success
+    if (connectionMode === 'snapshot') {
+      return
+    }
+
     let cancelled = false
     let timer: number | null = null
 
@@ -303,7 +371,7 @@ function App() {
         window.clearTimeout(timer)
       }
     }
-  }, [])
+  }, [connectionMode])
 
   useEffect(() => {
     if (!lastLatencyMs) {
@@ -399,6 +467,8 @@ function App() {
     wishlistCount,
     wishlistFeatureEnabled,
     products,
+    productsLoading,
+    productsError,
     orderTrackingEnabled,
     onSignIn: handleNavigate.toLogin,
     onSignOut: signOut,
@@ -696,7 +766,7 @@ function App() {
                       <div className="mt-4 flex items-center justify-between">
                         <span className="text-3xl font-semibold text-text">
                           {connectionMode === 'snapshot'
-                            ? 'Snapshot'
+                            ? 'API'
                             : connectionMode === 'mock'
                               ? 'Mock mode'
                               : connectionMode === 'offline'
@@ -832,7 +902,11 @@ function App() {
                                 <p className="text-lg font-semibold text-white truncate">{product.name}</p>
                                 <p className="text-sm text-slate-400 line-clamp-2">{product.description}</p>
                               </div>
-                              <span className="text-base font-semibold text-secondary flex-shrink-0">
+                              <span className={`text-base font-semibold flex-shrink-0 ${
+                                product.stockCount > 0 
+                                  ? 'text-secondary' 
+                                  : 'text-slate-500 line-through opacity-50'
+                              }`}>
                                 {moneyFormatter.format(product.price)}
                               </span>
                             </div>
@@ -840,24 +914,35 @@ function App() {
                               <span>Stock</span>
                               <span
                                 className={
-                                  product.stockCount <= 5
-                                    ? 'font-semibold text-secondary'
-                                    : 'font-semibold text-accent'
+                                  product.stockCount === 0
+                                    ? 'font-semibold text-slate-500'
+                                    : product.stockCount <= 5
+                                      ? 'font-semibold text-secondary'
+                                      : 'font-semibold text-accent'
                                 }
                               >
-                                {product.stockCount} units
+                                {product.stockCount === 0 ? 'Sold Out' : `${product.stockCount} units`}
                               </span>
                             </div>
                             <div className="mt-auto flex flex-col gap-2">
-                              <button
-                                className="w-full rounded-full bg-primary/80 px-4 py-2 text-xs font-semibold text-white shadow-brand"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  addToCart(product)
-                                }}
-                              >
-                                Add to cart
-                              </button>
+                              {product.stockCount > 0 ? (
+                                <button
+                                  className="w-full rounded-full bg-primary/80 px-4 py-2 text-xs font-semibold text-white shadow-brand hover:bg-primary transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    addToCart(product)
+                                  }}
+                                >
+                                  Add to cart
+                                </button>
+                              ) : (
+                                <button
+                                  className="w-full rounded-full bg-slate-700/50 px-4 py-2 text-xs font-semibold text-slate-500 cursor-not-allowed"
+                                  disabled
+                                >
+                                  Sold Out
+                                </button>
+                              )}
                               <div className="flex gap-2">
                                 <button
                                   className="flex-1 rounded-full border border-white/20 px-3 py-1.5 text-xs text-white/80 hover:border-white/40"

@@ -139,7 +139,7 @@ export function ProductDetailView({
                     >
                       {product.stockCount > 0
                         ? `${product.stockCount} ${product.stockCount === 1 ? 'unit' : 'units'} in stock`
-                        : 'Out of stock'}
+                        : 'Sold Out'}
                     </span>
                   </div>
                   {product.stockCount > 0 && (

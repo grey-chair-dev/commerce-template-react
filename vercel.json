@@ -1,0 +1,27 @@
+{
+  "functions": {
+    "api/webhooks/square-inventory.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/webhooks/square-order-paid.js": {
+      "memory": 512,
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/webhooks/square-inventory",
+      "destination": "/api/webhooks/square-inventory.js"
+    },
+    {
+      "source": "/api/webhooks/square-order-paid",
+      "destination": "/api/webhooks/square-order-paid.js"
+    },
+    {
+      "source": "/api/catalog/products",
+      "destination": "/api/catalog/products.js"
+    }
+  ]
+}
+
