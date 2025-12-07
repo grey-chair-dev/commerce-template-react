@@ -1,220 +1,360 @@
-# Local Commerce Template (LCT) v2.0
+# Commerce Template React
 
-A modern React e-commerce application that integrates with Square POS, Neon database, and real-time data adapters. The template features a full multi-page routing structure, authentication, product catalog, checkout flow, and user dashboard—all configurable through environment variables and feature flags.
+A modern, full-featured e-commerce platform built with React, Vite, and Square API integration. Features secure customer authentication, real-time inventory management, order processing, and comprehensive monitoring.
 
-## Features
+## 🚀 Features
 
-- 🛍️ **Full E-commerce Flow**: Product catalog, detail pages, shopping cart, and multi-step checkout
-- 🔐 **Authentication**: User sign-up, login, password recovery, and user dashboard
-- 📦 **Order Management**: Order tracking, order lookup, and order confirmation pages
-- 🔄 **Real-time Data**: WebSocket integration for live product updates with automatic fallback
-- 🎨 **Customizable Branding**: Easy rebranding via CSS variables and configuration files
-- 🚀 **Feature Flags**: Toggle features like wishlist, order tracking, maintenance mode, and more
-- 📱 **Responsive Design**: Modern UI built with React, TypeScript, and Tailwind CSS
+### Core E-Commerce
+- **Product Catalog**: Real-time product listings with Square API integration
+- **Shopping Cart**: Persistent cart with local storage and database sync
+- **Checkout Flow**: Secure checkout with Square payment processing
+- **Order Management**: Order tracking, confirmation, and history
+- **Pickup-Only Orders**: Streamlined pickup experience (no shipping)
 
-## Getting Started
+### Authentication & Security
+- **Email/Password Authentication**: Secure JWT-based authentication with bcrypt password hashing
+- **HTTP-Only Cookies**: XSS-protected session management
+- **Guest Checkout**: Support for both authenticated and guest orders
+- **Account Management**: User profiles with order history
 
-### Prerequisites
+### Inventory Management
+- **Real-Time Sync**: Square webhook integration for inventory updates
+- **Stock Tracking**: Automatic stock count management
+- **Inventory Auditing**: Complete audit trail of inventory changes
+
+### Monitoring & Alerts
+- **Comprehensive Monitoring**: 9 monitoring endpoints tracking system health
+- **Slack Integration**: Real-time alerts with actionable steps
+- **Automated Health Checks**: Daily cron jobs for proactive monitoring
+- **Error Tracking**: Detailed error logging with Error IDs
+
+## 📋 Prerequisites
 
 - Node.js 18+ and npm
-- A Neon database instance (for production)
-- Stack/Neon authentication credentials
+- Neon PostgreSQL database
+- Square Developer account with API credentials
+- Slack workspace (for monitoring alerts)
+- Vercel account (for deployment)
 
-### Installation
+## 🛠️ Setup
+
+### 1. Clone and Install
 
 ```bash
+git clone <repository-url>
+cd commerce-template-react
 npm install
-cp .env.example .env.local   # fill in Neon + Stack auth values
-npm run dev
 ```
 
-The application will be available at `http://localhost:5173` (or the port shown in your terminal).
+### 2. Environment Variables
 
-### Environment Variables
+Create a `.env.local` file in the root directory:
 
-**Required:**
-- `VITE_NEON_AUTH_URL` – Neon Auth endpoint that issues Better Auth tokens
-- `VITE_STACK_PROJECT_ID` – Stack/Neon project identifier passed to the auth adapter
-- `VITE_STACK_PUBLISHABLE_CLIENT_KEY` – Publishable key for client bootstrap
-- `VITE_APP_ID` – Application/tenant ID used when building the collection path
+```env
+# Database
+SPR_DATABASE_URL=postgresql://user:password@host/database
 
-**Data Adapter:**
-- `VITE_PRODUCTS_WS_URL` – WebSocket URL for real-time product updates (proxies `/artifacts/{appId}/public/data/products`)
-- `VITE_PRODUCTS_SNAPSHOT_URL` – HTTPS endpoint for REST fallback when WebSocket is unavailable (accepts `:appId` or `{appId}` token replacement)
-- `VITE_ADAPTER_HEALTH_URL` – Health check endpoint for the data adapter (polled every 30s)
-- `VITE_ENABLE_MOCK_DATA` – Set to `true` to enable mock data (default) or `false` for real-time only
+# Square API
+SQUARE_ACCESS_TOKEN=your_square_access_token
+SQUARE_LOCATION_ID=your_location_id
+SQUARE_ENVIRONMENT=sandbox
+SQUARE_SIGNATURE_KEY=your_webhook_signature_key
 
-**WebSocket Configuration:**
-- `VITE_WS_MAX_RETRIES` – Maximum reconnection attempts (default: 5)
-- `VITE_WS_BACKOFF_BASE_MS` – Base delay for exponential backoff (default: 1000ms)
-- `VITE_WS_BACKOFF_CAP_MS` – Maximum delay cap (default: 30000ms)
-- `VITE_SNAPSHOT_POLL_INTERVAL_MS` – Polling interval in degraded mode (default: 30000ms)
+# Authentication
+JWT_SECRET=your_jwt_secret_key
 
-**Monitoring (Optional):**
-- `VITE_ERROR_WEBHOOK_URL` – HTTP endpoint for error reporting
-- `VITE_METRICS_WEBHOOK_URL` – HTTP endpoint for metrics (latency, TTI)
+# Slack (for monitoring alerts)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
 
-**Feature Flags:**
-- `VITE_ENABLE_WISHLIST` – Enable/disable wishlist feature (default: `true`)
-- `VITE_ENABLE_ORDER_TRACKING` – Enable/disable order tracking (default: `true`)
-- `VITE_ENABLE_MAINTENANCE_PAGE` – Enable maintenance mode (default: `false`)
-- `VITE_ENABLE_COMING_SOON_PAGE` – Enable coming soon page (default: `false`)
-- `VITE_ENABLE_SOCIAL_LINKS` – Enable social media links (default: `true`)
-- `VITE_ENABLE_PROMO_BAR` – Enable promotional banner (default: `true`)
-- `VITE_ENABLE_NEWSLETTER` – Enable newsletter signup (default: `true`)
+# Email Service Provider (optional - choose one)
+SENDGRID_API_KEY=your_sendgrid_key
+# OR
+MAILGUN_API_KEY=your_mailgun_key
+MAILGUN_DOMAIN=your_mailgun_domain
+# OR
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+AWS_REGION=us-east-1
+# OR
+RESEND_API_KEY=your_resend_key
 
-**Runtime Injection:**
-- `window.__app_id` and `window.__neon_auth_url` are automatically honored if provided by the hosting platform
+# Site URL (for production)
+NEXT_PUBLIC_SITE_URL=https://your-domain.com
+```
 
-## Configuration
+### 3. Database Setup
 
-### Branding & Content
-
-All branding and content is configured in `src/config.ts`:
-
-- **Site Configuration**: Brand name, tagline, hero section, contact info, social links
-- **Feature Flags**: Toggle features like About page, Events, Maintenance mode, etc.
-- **CSS Variables**: Customize colors in `src/globals.css`:
-  - `--color-primary`
-  - `--color-secondary`
-  - `--color-accent`
-  - `--color-surface`
-  - `--color-text`
-
-### Checkout Modes
-
-Configure checkout delivery options:
+Run the database schema:
 
 ```bash
-npm run checkout:delivery    # Delivery only
-npm run checkout:pickup       # Pickup only
-npm run checkout:both         # Both delivery and pickup
+# Connect to your Neon database and run:
+psql $SPR_DATABASE_URL -f neon-schema.sql
 ```
 
-## Architecture
+Create the auth logs table for authentication monitoring:
 
-### Routing
+```bash
+node scripts/create-auth-logs-table.js
+```
 
-The application uses React Router for multi-page navigation with the following routes:
+### 4. Generate JWT Secret
 
-- `/` – Home page
-- `/catalog` – Product catalog
-- `/catalog/clearance` – Clearance items
-- `/product/:id` – Product detail page
-- `/checkout/shipping` – Checkout shipping step
-- `/checkout/payment` – Checkout payment step
-- `/checkout/review` – Checkout review step
-- `/order/confirmation` – Order confirmation
-- `/order/status/:id` – Order status page
-- `/order/lookup` – Order lookup
-- `/dashboard` – User dashboard
-- `/login` – Login page
-- `/signup` – Sign up page
-- `/forgot-password` – Password recovery
-- `/contact` – Contact page
-- `/about` – About page
-- `/faq` – FAQ page
-- `/shipping-returns` – Shipping & returns
-- `/privacy-terms` – Privacy & terms
-- `/maintenance` – Maintenance page (if enabled)
-- `/coming-soon` – Coming soon page (if enabled)
+```bash
+npm run generate-jwt-secret
+```
+
+Copy the output to `JWT_SECRET` in `.env.local` and Vercel environment variables.
+
+### 5. Development
+
+Start the Vercel dev server:
+
+```bash
+vercel dev
+```
+
+The app will be available at `http://localhost:5173` (frontend) and `http://localhost:3000` (API).
+
+## 📊 Monitoring System
+
+### Overview
+
+The application includes a comprehensive monitoring system with 9 monitoring endpoints that track system health, performance, and business metrics. All alerts are sent to Slack with specific, actionable steps.
+
+### Monitoring Endpoints
+
+#### 1. **Webhook Error Alerts** (`/api/webhooks/slack-alert`)
+- **5xx Errors on `/api/webhooks/square-order-paid`**: Alerts when paid orders fail to be recorded
+  - **Action**: Manual order insertion into Neon database
+- **5xx Errors on `/api/webhooks/square-inventory`**: Alerts when inventory updates fail
+  - **Action**: Manual SKU stock count fix
+- **403 Errors**: Alerts on webhook signature verification failures
+  - **Action**: Verify and update `SQUARE_SIGNATURE_KEY`
+
+#### 2. **Inventory Divergence Check** (`/api/monitoring/inventory-sync-check`)
+- **Metric**: Compares Square inventory with Neon database
+- **Alert**: Mismatches ≥5 units
+- **Action**: Code audit + full catalog/inventory resync
+- **Schedule**: Daily at 3 AM EST
+
+#### 3. **Neon Database Health** (`/api/monitoring/neon-health`)
+- **Connection Pool Usage**: Alerts when >80%
+  - **Action**: Scale up compute/connection limit + code audit
+- **Query Latency**: Alerts when SELECT queries >100ms
+  - **Action**: Add indexes + optimize queries
+- **Schedule**: Daily at 3 AM EST
+
+#### 4. **Cart Abandonment Rate** (`/api/monitoring/cart-abandonment`)
+- **Metric**: Ratio of carts started to transactions completed
+- **Alert**: Rate increases by 15% within 24 hours
+- **Action**: UX audit + log review
+- **Schedule**: Daily at 3 AM EST
+
+#### 5. **Authentication Failure Rate** (`/api/monitoring/auth-failure-rate`)
+- **Metric**: Ratio of successful to failed logins
+- **Alert**: Failure rate exceeds 3%
+- **Action**: Verify `JWT_SECRET` + test bcrypt logic
+- **Schedule**: Daily at 3 AM EST
+- **Requires**: `auth_logs` table (created via `scripts/create-auth-logs-table.js`)
+
+#### 6. **Square API Health** (`/api/monitoring/square-health`)
+- **Checks**: Square status page + direct API connectivity
+- **Alert**: Outages or degraded performance
+- **Action**: Display proactive site banner + check status page
+- **Schedule**: Daily at 3 AM EST
+
+#### 7. **Email Service Provider Health** (`/api/monitoring/esp-health`)
+- **Checks**: ESP status page + direct API connectivity
+- **Alert**: Outages or API failures
+- **Action**: Display proactive banner + manual customer notification
+- **Schedule**: Daily at 3 AM EST
+
+### Testing Monitoring Alerts
+
+Test all monitoring endpoints:
+
+```bash
+node scripts/test-all-monitoring-alerts.js
+```
+
+This will send test alerts to your Slack channel, verifying that all endpoints work correctly and include the expected actionable steps.
+
+### Manual Health Checks
+
+You can manually trigger any monitoring check:
+
+```bash
+# GET request (check status without alert)
+curl http://localhost:3000/api/monitoring/neon-health
+
+# POST request (check status and send alert if threshold breached)
+curl -X POST http://localhost:3000/api/monitoring/neon-health
+```
+
+### Debug Endpoint
+
+View monitoring system status and test connections:
+
+```bash
+curl http://localhost:3000/api/monitoring/debug
+```
+
+## 🧪 Testing
+
+### Automated Test Suites
+
+The application includes comprehensive automated test suites:
+
+#### Inventory Tests (`scripts/test-inventory-sync.js`)
+- **I-101**: Catalog sync verification
+- **I-102**: Real-time inventory sync
+- **I-103**: Zero stock logic
+- **I-104**: Stock limit validation
+
+```bash
+node scripts/test-inventory-sync.js
+```
+
+#### Authentication Tests (`scripts/test-auth-security.js`)
+- **A-201**: User registration with password hashing
+- **A-202**: Login and session management
+- **A-203**: JWT security validation
+- **A-204**: Checkout login flow
+
+```bash
+node scripts/test-auth-security.js
+```
+
+#### Checkout Tests (`scripts/test-checkout-orders.js`)
+- **C-301**: Checkout data integrity
+- **C-302**: Full transaction flow (manual)
+- **C-303**: Webhook order recording
+- **C-304**: Order history and data separation
+- **C-305**: Fulfillment status verification
+
+```bash
+node scripts/test-checkout-orders.js
+```
+
+#### Monitoring Tests (`scripts/test-all-monitoring-alerts.js`)
+- Tests all 9 monitoring endpoints
+- Verifies Slack alert delivery
+- Validates actionable steps in alerts
+
+```bash
+node scripts/test-all-monitoring-alerts.js
+```
+
+## 📁 Project Structure
+
+```
+commerce-template-react/
+├── api/                          # Vercel serverless functions
+│   ├── auth/                     # Authentication endpoints
+│   │   ├── register.js
+│   │   ├── login.js
+│   │   ├── logout.js
+│   │   └── me.js
+│   ├── checkout/                 # Checkout endpoints
+│   │   └── create.js
+│   ├── monitoring/                # Monitoring endpoints
+│   │   ├── neon-health.js
+│   │   ├── inventory-sync-check.js
+│   │   ├── cart-abandonment.js
+│   │   ├── auth-failure-rate.js
+│   │   ├── square-health.js
+│   │   ├── esp-health.js
+│   │   └── debug.js
+│   ├── webhooks/                  # Webhook handlers
+│   │   ├── square-inventory.js
+│   │   ├── square-order-paid.js
+│   │   └── slack-alert.js
+│   └── middleware/                # Shared middleware
+│       └── auth.js
+├── src/                           # React frontend
+│   ├── components/                # React components
+│   ├── auth/                     # Authentication providers
+│   └── App.tsx                   # Main app component
+├── scripts/                       # Utility scripts
+│   ├── test-*.js                 # Test suites
+│   ├── create-auth-logs-table.js
+│   └── generate-jwt-secret.js
+├── neon-schema.sql               # Database schema
+├── vercel.json                   # Vercel configuration
+└── package.json
+```
+
+## 🚢 Deployment
+
+### Vercel Deployment
+
+1. **Connect Repository**: Link your GitHub repository to Vercel
+
+2. **Set Environment Variables**: Add all variables from `.env.local` to Vercel Dashboard:
+   - Go to Project Settings → Environment Variables
+   - Add each variable for Production, Preview, and Development environments
+
+3. **Deploy**:
+   ```bash
+   vercel --prod
+   ```
+
+4. **Configure Square Webhooks**: 
+   - In Square Developer Dashboard, set webhook URLs:
+     - `https://your-domain.vercel.app/api/webhooks/square-inventory`
+     - `https://your-domain.vercel.app/api/webhooks/square-order-paid`
+   - Copy the webhook signature key to `SQUARE_SIGNATURE_KEY`
+
+5. **Verify Cron Jobs**: 
+   - Cron jobs are configured in `vercel.json`
+   - All monitoring checks run daily at 3 AM EST
+   - Verify in Vercel Dashboard → Cron Jobs
+
+## 🔒 Security
 
 ### Authentication
+- Passwords are hashed with bcrypt (10 rounds)
+- JWT tokens stored in HTTP-only cookies
+- SameSite=Strict in production (CSRF protection)
+- Secure flag enabled in production (HTTPS only)
 
-- **StackAuthProvider**: Wraps the app with Neon Auth adapter (Supabase-style)
-- Supports initial auth token injection via `__initial_auth_token`
-- User session management with automatic token refresh
-- Protected routes for authenticated user areas
+### Environment Variables
+- Never commit `.env.local` to version control
+- Use Vercel Dashboard for production secrets
+- Rotate `JWT_SECRET` periodically
 
-### Real-time Data
+### Webhook Security
+- Square webhook signature verification
+- IP whitelisting (via Vercel)
+- Error logging with Error IDs for tracking
 
-- **WebSocket Integration**: `subscribeToProducts()` connects to the data adapter via WebSocket
-- **Automatic Fallback**: Falls back to REST snapshot or mock data if WebSocket fails
-- **Health Monitoring**: Polls adapter health endpoint and displays status in UI
-- **Exponential Backoff**: Automatic reconnection with configurable retry strategy
+## 📚 Documentation
 
-### Security
+- **Security Setup**: See `SECURITY_SETUP.md` for JWT configuration
+- **Square Test Cards**: See `SQUARE_SANDBOX_TEST_CARDS.md` for testing payments
+- **Browser HSTS Fix**: See `BROWSER_HSTS_FIX.md` for localhost HTTPS issues
 
-- **Input Sanitization**: All product data is sanitized via `sanitizeText()` before rendering
-- **XSS Protection**: Strips HTML tags, script blocks, and non-printable characters
-- **Client-side Hardening**: Even compromised upstream data remains display-only
+## 🤝 Contributing
 
-### Monitoring & Resilience
+1. Create a feature branch
+2. Make your changes
+3. Run test suites to verify functionality
+4. Submit a pull request
 
-- **Error Tracking**: Global error handlers capture and report client errors
-- **Metrics Collection**: Tracks latency, TTI, and adapter health
-- **Webhook Integration**: Optional error and metrics webhooks for observability
-- **Cookie Consent**: User consent banner for analytics/monitoring
+## 📝 License
 
-## Scripts
+[Your License Here]
 
-### Development
+## 🆘 Support
 
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run preview      # Preview production build
-npm run lint         # Run ESLint
-```
+For issues or questions:
+1. Check the monitoring debug endpoint: `/api/monitoring/debug`
+2. Review Vercel logs for Error IDs
+3. Check Slack alerts for actionable steps
+4. Review test suite outputs for specific failures
 
-### Feature Management
+---
 
-```bash
-npm run mock:add              # Enable mock data
-npm run mock:delete           # Disable mock data (use real-time only)
-npm run wishlist:add          # Enable wishlist feature
-npm run wishlist:delete       # Disable wishlist feature
-npm run order-tracking:add    # Enable order tracking
-npm run order-tracking:delete # Disable order tracking
-npm run maintenance:add       # Enable maintenance mode
-npm run maintenance:delete    # Disable maintenance mode
-```
+**Built for Spiral Groove Records by Grey Chair Digital**
 
-## Testing Real-time Feed Locally
-
-1. Leave `VITE_PRODUCTS_WS_URL` empty to enable the mock data emitter
-2. Run `npm run dev`
-3. Modify `src/dataAdapter.ts` mock data to simulate product updates
-4. Observe the "Real-time adapter health" panel—latency should remain under 1s
-
-When integrating with your actual adapter, ensure WebSocket payloads follow:
-- `{ products: Product[] }` for bulk updates
-- `{ product: Product }` for single product updates
-
-## Project Structure
-
-```
-src/
-├── components/          # React components
-│   ├── Header.tsx      # Site header with navigation
-│   ├── Footer.tsx      # Site footer
-│   ├── CatalogPage.tsx # Product catalog
-│   ├── ProductDetailPage.tsx
-│   ├── Checkout*.tsx   # Checkout flow pages
-│   ├── Order*.tsx      # Order management pages
-│   └── ...
-├── auth/               # Authentication
-│   └── StackAuthProvider.tsx
-├── config/             # Configuration
-│   └── auth.ts
-├── routes/             # Route configuration
-│   └── RouteWrapper.tsx
-├── utils/              # Utilities
-│   └── sanitize.ts     # Input sanitization
-├── config.ts           # Site configuration & feature flags
-├── dataAdapter.ts      # Real-time data adapter
-├── monitoring.ts       # Error tracking & metrics
-├── formatters.ts       # Data formatters
-└── App.tsx             # Main app component with routing
-```
-
-## Compliance & UX
-
-- **Privacy & Terms**: Footer links pull from `siteConfig.legal.*` for easy policy updates
-- **Cookie Consent**: Lightweight consent banner stores user preference in `localStorage` (`lct_cookie_consent`)
-- **Accessibility**: Built with semantic HTML and ARIA best practices
-- **Responsive**: Mobile-first design with Tailwind CSS
-
-## License
-
-[Add your license information here]
+Built with ❤️ using React, Vite, Square API, Neon PostgreSQL, and Vercel

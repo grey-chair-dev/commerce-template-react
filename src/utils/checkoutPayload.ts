@@ -5,15 +5,11 @@
 
 import type { CartItem } from '../App'
 
-export type ShippingForm = {
-  deliveryMethod?: 'delivery' | 'pickup'
+// Contact form for pickup-only orders
+export type ContactForm = {
   email: string
   firstName: string
   lastName: string
-  address: string
-  city: string
-  state: string
-  zipCode: string
   phone: string
   pickupLocation?: string
 }
@@ -24,45 +20,34 @@ export type CheckoutPayload = {
     sku: string
     quantity: number
   }>
-  shipping_details: {
-    address: {
-      firstName: string
-      lastName: string
-      email: string
-      phone: string
-      street: string
-      city: string
-      state: string
-      zipCode: string
-      country?: string
-    }
-    deliveryMethod: 'delivery' | 'pickup'
-    cost: number
-    pickupLocation?: string
+  customer_details: {
+    firstName: string
+    lastName: string
+    email: string
+    phone: string
   }
   totals: {
     subtotal: number
-    shipping: number
+    shipping: number // Always 0 for pickup
     tax: number
     total: number
   }
 }
 
 /**
- * Assembles checkout payload from cart items, shipping form, and user data
+ * Assembles checkout payload from cart items, contact form, and user data
+ * Simplified for pickup-only orders - only collects name, email, and phone
  * @param cartItems - Array of cart items with product details and quantities
- * @param shippingForm - Shipping form data with address and delivery method
- * @param cartSubtotal - Cart subtotal before shipping and tax
- * @param estimatedShipping - Estimated shipping cost
+ * @param contactForm - Contact form data (name, email, phone)
+ * @param cartSubtotal - Cart subtotal before tax
  * @param estimatedTax - Estimated tax amount
  * @param customerId - Signed-in customer ID (from user.id), or null if guest checkout
  * @returns Complete checkout payload ready for order processing
  */
 export function assembleCheckoutPayload(
   cartItems: CartItem[],
-  shippingForm: ShippingForm,
+  contactForm: ContactForm,
   cartSubtotal: number,
-  estimatedShipping: number,
   estimatedTax: number,
   customerId: string | null = null,
 ): CheckoutPayload {
@@ -73,34 +58,24 @@ export function assembleCheckoutPayload(
     quantity: item.quantity,
   }))
 
-  // Assemble shipping details
-  const shipping_details = {
-    address: {
-      firstName: shippingForm.firstName,
-      lastName: shippingForm.lastName,
-      email: shippingForm.email,
-      phone: shippingForm.phone || '',
-      street: shippingForm.address || '',
-      city: shippingForm.city || '',
-      state: shippingForm.state || '',
-      zipCode: shippingForm.zipCode || '',
-      country: 'US', // Default to US, can be made configurable
-    },
-    deliveryMethod: (shippingForm.deliveryMethod || 'delivery') as 'delivery' | 'pickup',
-    cost: estimatedShipping,
-    ...(shippingForm.pickupLocation && { pickupLocation: shippingForm.pickupLocation }),
+  // Assemble customer details (pickup-only - no address needed)
+  const customer_details = {
+    firstName: contactForm.firstName,
+    lastName: contactForm.lastName,
+    email: contactForm.email,
+    phone: contactForm.phone || '',
   }
 
-  // Calculate totals
-  const total = cartSubtotal + estimatedShipping + estimatedTax
+  // Calculate totals (no shipping cost for pickup)
+  const total = cartSubtotal + estimatedTax
 
   return {
     customer_id: customerId,
     items,
-    shipping_details,
+    customer_details,
     totals: {
       subtotal: cartSubtotal,
-      shipping: estimatedShipping,
+      shipping: 0, // Always 0 for pickup orders
       tax: estimatedTax,
       total,
     },

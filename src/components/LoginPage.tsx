@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { getOAuthProvidersOnly, getAuthConfig } from '../config/auth'
+import { useStackAuth } from '../auth/StackAuthProvider'
 
 type LoginPageProps = {
   onSignIn: (provider?: string) => Promise<void>
@@ -19,15 +20,114 @@ export function LoginPage({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   const authConfig = useMemo(() => getAuthConfig(), [])
   const oauthProviders = useMemo(() => getOAuthProvidersOnly(), [])
+  const { refreshAuth } = useStackAuth()
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In production, this would call an email/password auth method
-    // For now, we'll just show that email/password isn't implemented
-    alert('Email/password login is not configured. Please use social login.')
+    setError(null)
+    setIsSubmitting(true)
+
+    try {
+      console.log('[Login] Attempting login:', { email: email.trim() })
+      
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Important: include cookies
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      })
+
+      let data
+      try {
+        const text = await response.text()
+        console.log('[Login] Response status:', response.status, 'Response text:', text)
+        if (text) {
+          data = JSON.parse(text)
+        }
+      } catch (parseError) {
+        console.error('[Login] Failed to parse response:', parseError)
+        setError('Invalid response from server. Please try again.')
+        setIsSubmitting(false)
+        return
+      }
+
+      if (!response.ok) {
+        console.error('[Login] Login failed:', data)
+        // Handle validation errors
+        if (data) {
+          if (data.details) {
+            if (Array.isArray(data.details)) {
+              setError(data.details.join(', '))
+            } else {
+              setError(data.details)
+            }
+          } else {
+            setError(data.error || 'Failed to sign in. Please try again.')
+          }
+        } else {
+          setError(`Server error (${response.status}). Please try again.`)
+        }
+        setIsSubmitting(false)
+        return
+      }
+
+      // Success - cookie is automatically set by the browser
+      console.log('[Login] Login successful:', data)
+      setIsSubmitting(false)
+      
+      // For localhost development with cross-port cookies, redirect to home
+      // This ensures the cookie is properly available for subsequent requests
+      if (window.location.hostname === 'localhost') {
+        console.log('[Login] Redirecting to home page...')
+        // Navigate to home first, then the page will reload naturally
+        window.location.href = '/'
+        return
+      }
+      
+      // Small delay to ensure cookie is set before checking auth
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Refresh auth state to recognize the logged-in user
+      try {
+        await refreshAuth()
+        console.log('[Login] Auth state refreshed successfully')
+      } catch (refreshError) {
+        console.error('[Login] Failed to refresh auth, reloading page:', refreshError)
+        // If refresh fails, reload the page to ensure cookie is picked up
+        window.location.reload()
+        return
+      }
+      
+      // Check if we should return to checkout
+      const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
+      if (returnToCheckout) {
+        // Don't call onBack - let App.tsx handle the redirect
+        // The useEffect in App.tsx will detect the user and return to checkout
+        sessionStorage.removeItem('return_to_checkout')
+        if (window.location.hostname === 'localhost') {
+          window.location.href = '/'
+        } else {
+          window.location.reload()
+        }
+        return
+      }
+      
+      onBack()
+    } catch (err) {
+      console.error('Login error:', err)
+      setError('Network error. Please check your connection and try again.')
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -125,6 +225,12 @@ export function LoginPage({
             {/* Email/Password Form */}
             {authConfig.emailPasswordEnabled && (
               <form onSubmit={handleEmailLogin} className="space-y-4">
+              {error && (
+                <div className="rounded-2xl border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-400">
+                  {error}
+                </div>
+              )}
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Email address
@@ -132,9 +238,13 @@ export function LoginPage({
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setError(null)
+                  }}
                   placeholder="you@example.com"
                   className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
+                  required
                 />
               </div>
 
@@ -153,9 +263,13 @@ export function LoginPage({
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      setError(null)
+                    }}
                     placeholder="Enter your password"
                     className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 pr-10 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
+                    required
                   />
                   <button
                     type="button"
@@ -170,9 +284,9 @@ export function LoginPage({
               <button
                 type="submit"
                 className="w-full rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white shadow-brand disabled:opacity-50"
-                disabled={isLoading || !email || !password}
+                disabled={isLoading || isSubmitting || !email || !password}
               >
-                {isLoading ? 'Signing in...' : 'Sign In'}
+                {isSubmitting ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
             )}

@@ -1,11 +1,55 @@
 import { useState } from 'react'
+import { Header } from './Header'
+import { Footer } from './Footer'
+import type { Product } from '../dataAdapter'
 
 type ForgotPasswordPageProps = {
   onBack: () => void
   onSignIn: () => void
+  user?: any
+  isLoading?: boolean
+  cartCount?: number
+  wishlistCount?: number
+  wishlistFeatureEnabled?: boolean
+  products?: Product[]
+  orderTrackingEnabled?: boolean
+  onSignOut?: () => void
+  onAccount?: () => void
+  onCart?: () => void
+  onWishlist?: () => void
+  onSearch?: () => void
+  onProductSelect?: (product: Product) => void
+  onTrackOrder?: () => void
+  onContactUs?: () => void
+  onAboutUs?: () => void
+  onShippingReturns?: () => void
+  onPrivacyPolicy?: () => void
+  onTermsOfService?: () => void
 }
 
-export function ForgotPasswordPage({ onBack, onSignIn }: ForgotPasswordPageProps) {
+export function ForgotPasswordPage({
+  onBack,
+  onSignIn,
+  user,
+  isLoading = false,
+  cartCount = 0,
+  wishlistCount = 0,
+  wishlistFeatureEnabled = false,
+  products = [],
+  orderTrackingEnabled = false,
+  onSignOut,
+  onAccount,
+  onCart,
+  onWishlist,
+  onSearch,
+  onProductSelect,
+  onTrackOrder,
+  onContactUs,
+  onAboutUs,
+  onShippingReturns,
+  onPrivacyPolicy,
+  onTermsOfService,
+}: ForgotPasswordPageProps) {
   const [email, setEmail] = useState('')
   const [isSubmitted, setIsSubmitted] = useState(false)
 
@@ -20,7 +64,22 @@ export function ForgotPasswordPage({ onBack, onSignIn }: ForgotPasswordPageProps
   if (isSubmitted) {
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
-        <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+        <Header
+          user={user}
+          isLoading={isLoading}
+          cartCount={cartCount}
+          wishlistCount={wishlistCount}
+          wishlistFeatureEnabled={wishlistFeatureEnabled}
+          products={products}
+          onSignIn={onSignIn}
+          onSignOut={onSignOut || (() => {})}
+          onAccount={onAccount || (() => {})}
+          onCart={onCart || (() => {})}
+          onWishlist={onWishlist || (() => {})}
+          onSearch={onSearch || (() => {})}
+          onProductSelect={onProductSelect || (() => {})}
+        />
+        <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6 lg:px-8 pt-40 sm:pt-48 md:pt-56">
           <div className="flex flex-1 flex-col items-center justify-center">
             <div className="w-full max-w-md space-y-6 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/20">
@@ -65,13 +124,37 @@ export function ForgotPasswordPage({ onBack, onSignIn }: ForgotPasswordPageProps
             </div>
           </div>
         </div>
+        <Footer
+          orderTrackingEnabled={orderTrackingEnabled}
+          onTrackOrder={onTrackOrder || (() => {})}
+          onContactUs={onContactUs || (() => {})}
+          onAboutUs={onAboutUs}
+          onShippingReturns={onShippingReturns}
+          onPrivacyPolicy={onPrivacyPolicy}
+          onTermsOfService={onTermsOfService}
+        />
       </div>
     )
   }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
-      <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+      <Header
+        user={user}
+        isLoading={isLoading}
+        cartCount={cartCount}
+        wishlistCount={wishlistCount}
+        wishlistFeatureEnabled={wishlistFeatureEnabled}
+        products={products}
+        onSignIn={onSignIn}
+        onSignOut={onSignOut || (() => {})}
+        onAccount={onAccount || (() => {})}
+        onCart={onCart || (() => {})}
+        onWishlist={onWishlist || (() => {})}
+        onSearch={onSearch || (() => {})}
+        onProductSelect={onProductSelect || (() => {})}
+      />
+      <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6 lg:px-8 pt-40 sm:pt-48 md:pt-56">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -129,6 +212,15 @@ export function ForgotPasswordPage({ onBack, onSignIn }: ForgotPasswordPageProps
           </div>
         </div>
       </div>
+      <Footer
+        orderTrackingEnabled={orderTrackingEnabled}
+        onTrackOrder={onTrackOrder || (() => {})}
+        onContactUs={onContactUs || (() => {})}
+        onAboutUs={onAboutUs}
+        onShippingReturns={onShippingReturns}
+        onPrivacyPolicy={onPrivacyPolicy}
+        onTermsOfService={onTermsOfService}
+      />
     </div>
   )
 }

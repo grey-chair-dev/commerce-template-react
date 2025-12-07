@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { getOAuthProvidersOnly, getAuthConfig } from '../config/auth'
+import { useStackAuth } from '../auth/StackAuthProvider'
 
 type SignUpPageProps = {
   onSignUp: (provider?: string) => Promise<void>
@@ -18,14 +19,107 @@ export function SignUpPage({
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   const authConfig = useMemo(() => getAuthConfig(), [])
   const oauthProviders = useMemo(() => getOAuthProvidersOnly(), [])
+  const { refreshAuth } = useStackAuth()
 
   const handleEmailSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In production, this would call an email/password signup method
-    alert('Email/password signup is not configured. Please use social signup.')
+    setError(null)
+    setIsSubmitting(true)
+
+    try {
+      // Parse name into first and last name
+      const nameParts = name.trim().split(/\s+/)
+      const firstName = nameParts[0] || ''
+      const lastName = nameParts.slice(1).join(' ') || ''
+
+      console.log('[SignUp] Attempting registration:', { email: email.trim(), firstName, lastName })
+
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Important: include cookies
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          first_name: firstName,
+          last_name: lastName,
+        }),
+      })
+
+      let data
+      try {
+        const text = await response.text()
+        console.log('[SignUp] Response status:', response.status, 'Response text:', text)
+        if (text) {
+          data = JSON.parse(text)
+        }
+      } catch (parseError) {
+        console.error('[SignUp] Failed to parse response:', parseError)
+        setError('Invalid response from server. Please try again.')
+        setIsSubmitting(false)
+        return
+      }
+
+      if (!response.ok) {
+        console.error('[SignUp] Registration failed:', data)
+        // Handle validation errors
+        if (data) {
+          if (data.details) {
+            if (Array.isArray(data.details)) {
+              setError(data.details.join(', '))
+            } else {
+              setError(data.details)
+            }
+          } else {
+            setError(data.error || 'Failed to create account. Please try again.')
+          }
+        } else {
+          setError(`Server error (${response.status}). Please try again.`)
+        }
+        setIsSubmitting(false)
+        return
+      }
+
+      // Success - automatically log in the user (cookie is set)
+      console.log('[SignUp] Registration successful:', data)
+      setIsSubmitting(false)
+      
+      // For localhost development with cross-port cookies, redirect to home and reload
+      // This ensures the cookie is properly available for subsequent requests
+      if (window.location.hostname === 'localhost') {
+        console.log('[SignUp] Redirecting to home page...')
+        // Navigate to home first, then the page will reload naturally
+        window.location.href = '/'
+        return
+      }
+      
+      // Small delay to ensure cookie is set before checking auth
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // Refresh auth state to recognize the new user
+      try {
+        await refreshAuth()
+        console.log('[SignUp] Auth state refreshed successfully')
+      } catch (refreshError) {
+        console.error('[SignUp] Failed to refresh auth, reloading page:', refreshError)
+        // If refresh fails, reload the page to ensure cookie is picked up
+        window.location.reload()
+        return
+      }
+      
+      onBack()
+    } catch (err) {
+      console.error('Sign up error:', err)
+      setError('Network error. Please check your connection and try again.')
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -134,14 +228,24 @@ export function SignUpPage({
             {/* Email/Password Form */}
             {authConfig.emailPasswordEnabled && (
               <form onSubmit={handleEmailSignUp} className="space-y-4">
+              {error && (
+                <div className="rounded-2xl border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-400">
+                  {error}
+                </div>
+              )}
+
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">Full name</label>
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    setError(null)
+                  }}
                   placeholder="John Doe"
                   className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
+                  required
                 />
               </div>
 
@@ -152,7 +256,10 @@ export function SignUpPage({
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setError(null)
+                  }}
                   placeholder="you@example.com"
                   className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
                   required
@@ -165,7 +272,10 @@ export function SignUpPage({
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value)
+                      setError(null)
+                    }}
                     placeholder="Create a password"
                     className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 pr-10 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
                     required
@@ -179,16 +289,16 @@ export function SignUpPage({
                   </button>
                 </div>
                 <p className="mt-1 text-xs text-slate-400">
-                  Must be at least 8 characters long
+                  Must be at least 8 characters long, with uppercase, lowercase, and a number
                 </p>
               </div>
 
               <button
                 type="submit"
                 className="w-full rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white shadow-brand disabled:opacity-50"
-                disabled={isLoading || !email || !password || !name}
+                disabled={isLoading || isSubmitting || !email || !password || !name}
               >
-                {isLoading ? 'Creating account...' : 'Create Account'}
+                {isSubmitting ? 'Creating account...' : 'Create Account'}
               </button>
             </form>
             )}

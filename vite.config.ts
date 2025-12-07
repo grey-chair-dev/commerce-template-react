@@ -19,6 +19,8 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
         secure: false,
+        cookieDomainRewrite: 'localhost', // Ensure cookies work across ports
+        cookiePathRewrite: '/', // Ensure cookies work across paths
         // Only proxy if Vercel dev is running, otherwise let it fail gracefully
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {

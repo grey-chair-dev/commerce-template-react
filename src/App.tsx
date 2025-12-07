@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { featureFlags, siteConfig } from './config'
 import {
   subscribeToProducts,
@@ -13,8 +13,8 @@ import { useStackAuth, useUser } from './auth/StackAuthProvider'
 import { SearchOverlay } from './components/SearchOverlay'
 import { ProductDetailView } from './components/ProductDetailView'
 import { ProductDetailPage } from './components/ProductDetailPage'
-import { CheckoutShippingPage } from './components/CheckoutShippingPage'
-import { CheckoutPaymentPage } from './components/CheckoutPaymentPage'
+import { CheckoutAccountPage } from './components/CheckoutAccountPage'
+import { CheckoutContactPage } from './components/CheckoutContactPage'
 import { CheckoutReviewPage } from './components/CheckoutReviewPage'
 import { OrderConfirmationPage } from './components/OrderConfirmationPage'
 import { OrderStatusPage } from './components/OrderStatusPage'
@@ -38,6 +38,9 @@ import { Footer } from './components/Footer'
 import { moneyFormatter } from './formatters'
 
 export type CartItem = Product & { quantity: number }
+
+// LocalStorage key for cart persistence
+const CART_STORAGE_KEY = 'lct_cart'
 
 const wishlistFeatureEnabled =
   (import.meta.env.VITE_ENABLE_WISHLIST ?? 'true').toString().toLowerCase() !== 'false'
@@ -103,6 +106,7 @@ const CookieBanner = ({
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { user, isLoading } = useUser()
   const { signInWithOAuth, signOut } = useStackAuth()
   const [products, setProducts] = useState<Product[]>([])
@@ -120,25 +124,27 @@ function App() {
   const [pdpProduct, setPdpProduct] = useState<Product | null>(null)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [wishlist, setWishlist] = useState<Product[]>([])
+  const [isCartSyncing, setIsCartSyncing] = useState(false)
   const [isCartOpen, setCartOpen] = useState(false)
   const [isWishlistOpen, setWishlistOpen] = useState(false)
-  const [checkoutStep, setCheckoutStep] = useState<'shipping' | 'payment' | 'review' | null>(null)
-  const [shippingForm, setShippingForm] = useState<any>(null)
-  const [paymentForm, setPaymentForm] = useState<any>(null)
+  const [checkoutStep, setCheckoutStep] = useState<'account' | 'contact' | 'review' | null>(null)
+  const [contactForm, setContactForm] = useState<any>(null)
   const [orderConfirmation, setOrderConfirmation] = useState<{
     orderNumber: string
     cartItems: CartItem[]
-    shippingForm: any
+    contactForm: any
     cartSubtotal: number
-    estimatedShipping: number
     estimatedTax: number
+  } | null>(null)
+  const [paymentError, setPaymentError] = useState<{
+    code: string
+    message: string
   } | null>(null)
   const [orderStatusView, setOrderStatusView] = useState<{
     orderNumber: string
     cartItems: CartItem[]
-    shippingForm: any
+    contactForm: any
     cartSubtotal: number
-    estimatedShipping: number
     estimatedTax: number
   } | null>(null)
   const [isOrderLookupOpen, setOrderLookupOpen] = useState(false)
@@ -146,6 +152,169 @@ function App() {
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
+
+  // P.2: Load cart from localStorage on app initialization (after products are loaded)
+  useEffect(() => {
+    // Only load cart if products are available and we haven't loaded it yet
+    if (products.length === 0 || cartItems.length > 0) {
+      return
+    }
+
+    try {
+      const savedCart = localStorage.getItem(CART_STORAGE_KEY)
+      if (savedCart) {
+        const parsedCart = JSON.parse(savedCart)
+        if (Array.isArray(parsedCart) && parsedCart.length > 0) {
+          // Match localStorage cart items with current products
+          const matchedCart: CartItem[] = []
+          for (const item of parsedCart) {
+            const product = products.find(p => p.id === item.sku)
+            if (product && item.quantity > 0) {
+              matchedCart.push({
+                ...product,
+                quantity: item.quantity,
+              })
+            }
+          }
+          
+          if (matchedCart.length > 0) {
+            console.log('[Cart] Loaded cart from localStorage:', matchedCart.length, 'items')
+            setCartItems(matchedCart)
+          } else {
+            // Clear invalid cart data
+            localStorage.removeItem(CART_STORAGE_KEY)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Cart] Failed to load cart from localStorage:', error)
+    }
+  }, [products]) // Run when products are loaded
+
+  // P.1: Save cart to localStorage on every change
+  useEffect(() => {
+    try {
+      if (cartItems.length > 0) {
+        // Serialize cart items (only sku and quantity for storage)
+        const cartData = cartItems.map(item => ({
+          sku: item.id,
+          quantity: item.quantity,
+        }))
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
+        console.log('[Cart] Saved cart to localStorage:', cartItems.length, 'items')
+      } else {
+        // Clear localStorage if cart is empty
+        localStorage.removeItem(CART_STORAGE_KEY)
+        console.log('[Cart] Cleared cart from localStorage')
+      }
+    } catch (error) {
+      console.error('[Cart] Failed to save cart to localStorage:', error)
+    }
+  }, [cartItems])
+
+  // P.3: Sync cart with database when user logs in
+  useEffect(() => {
+    const syncCartOnLogin = async () => {
+      // Only sync if user is logged in and we're not already syncing
+      if (!user || !user.id || isCartSyncing) {
+        return
+      }
+
+      try {
+        setIsCartSyncing(true)
+        console.log('[Cart] User logged in, syncing cart with database...')
+
+        // Get localStorage cart
+        const savedCart = localStorage.getItem(CART_STORAGE_KEY)
+        const localCartItems = savedCart ? JSON.parse(savedCart) : []
+
+        if (localCartItems.length === 0) {
+          // No local cart - try to load from database
+          console.log('[Cart] No local cart, loading from database...')
+          const response = await fetch('/api/user/cart', {
+            method: 'GET',
+            credentials: 'include',
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.cart && data.cart.length > 0) {
+              console.log('[Cart] Loaded cart from database:', data.cart.length, 'items')
+              setCartItems(data.cart)
+            }
+          }
+        } else {
+          // Merge local cart with database cart
+          console.log('[Cart] Merging local cart with database cart...')
+          const response = await fetch('/api/user/sync-cart', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              localCartItems: localCartItems,
+            }),
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.cart) {
+              console.log('[Cart] Cart synced successfully:', data.cart.length, 'items')
+              setCartItems(data.cart)
+              
+              // Update localStorage with merged cart
+              const mergedCartData = data.cart.map((item: CartItem) => ({
+                sku: item.id,
+                quantity: item.quantity,
+              }))
+              localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(mergedCartData))
+            }
+          } else {
+            console.error('[Cart] Failed to sync cart:', response.status)
+          }
+        }
+      } catch (error) {
+        console.error('[Cart] Error syncing cart on login:', error)
+      } finally {
+        setIsCartSyncing(false)
+      }
+    }
+
+    syncCartOnLogin()
+  }, [user, isCartSyncing])
+
+  // P.4: Save cart to database when logged in user makes changes
+  const saveCartToDatabase = async (items: CartItem[]) => {
+    if (!user || !user.id || isCartSyncing) {
+      return // Only save if user is logged in
+    }
+
+    try {
+      // Serialize cart items (only sku and quantity)
+      const cartData = items.map(item => ({
+        sku: item.id,
+        quantity: item.quantity,
+      }))
+
+      // Save to database asynchronously (don't block UI)
+      fetch('/api/user/cart', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          items: cartData,
+        }),
+      }).catch((error) => {
+        console.error('[Cart] Failed to save cart to database:', error)
+        // Don't show error to user - localStorage is the fallback
+      })
+    } catch (error) {
+      console.error('[Cart] Error saving cart to database:', error)
+    }
+  }
 
   // Scroll to top on route change
   useEffect(() => {
@@ -164,6 +333,264 @@ function App() {
       setAuthPage(null)
     }
   }, [location.pathname])
+
+  // Redirect authenticated users away from login/signup pages
+  // If they were in checkout, return them to checkout
+  useEffect(() => {
+    if (!isLoading && user && (location.pathname === '/login' || location.pathname === '/signup')) {
+      // Check if we should return to checkout
+      const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
+      if (returnToCheckout) {
+        console.log('[App] User authenticated, returning to checkout')
+        sessionStorage.removeItem('return_to_checkout')
+        // User logged in, skip account and contact, go to review with their info
+        // Fetch user data and create contact form
+        fetch('/api/auth/me', {
+          method: 'GET',
+          credentials: 'include',
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data?.success && data.customer) {
+              setContactForm({
+                email: data.customer.email,
+                firstName: data.customer.firstName,
+                lastName: data.customer.lastName,
+                phone: data.customer.phone || '',
+              })
+              setCheckoutStep('review')
+            } else {
+              // Fallback: go to account selection
+              setCheckoutStep('account')
+            }
+          })
+          .catch(() => {
+            // Fallback: go to account selection
+            setCheckoutStep('account')
+          })
+        // Close auth page modal by navigating to home
+        navigate('/')
+      } else {
+        console.log('[App] User is authenticated, redirecting from', location.pathname, 'to home')
+        navigate('/')
+      }
+    }
+  }, [user, isLoading, location.pathname, navigate, checkoutStep])
+
+  // Handle return from Square checkout - verify payment and load order data
+  useEffect(() => {
+    const orderId = searchParams.get('id')
+    
+    // Clear payment error when navigating away from order-confirmation page
+    if (location.pathname !== '/order-confirmation' && paymentError) {
+      setPaymentError(null)
+    }
+    
+    // Check for error codes ONLY in explicit query parameters
+    // Square may send errors in different formats: error, error_code, code
+    // Only check explicit parameters, not patterns in the URL (to avoid false positives)
+    let errorCode = searchParams.get('error') || 
+                    searchParams.get('error_code') || 
+                    searchParams.get('code') ||
+                    searchParams.get('errorCode')
+    
+    // Only check hash for explicit error parameters (not patterns)
+    if (!errorCode && location.hash) {
+      const hashParams = new URLSearchParams(location.hash.substring(1))
+      errorCode = hashParams.get('error') || 
+                  hashParams.get('error_code') || 
+                  hashParams.get('code') ||
+                  hashParams.get('errorCode')
+    }
+    
+    const errorMessage = searchParams.get('error_message') || 
+                        searchParams.get('error_description') ||
+                        searchParams.get('message') ||
+                        searchParams.get('errorMessage')
+    
+    // Log for debugging
+    console.log('[Order Confirmation] Checking for errors:', {
+      orderId,
+      errorCode,
+      errorMessage,
+      search: location.search,
+      hash: location.hash,
+      fullUrl: location.pathname + location.search + location.hash,
+      allParams: Object.fromEntries(searchParams.entries()),
+    })
+    
+    // CRITICAL: If we have an order ID, IGNORE error codes completely
+    // Square sometimes adds error codes to URLs even on success
+    // The order status from the database is the source of truth
+    // Only show error if we have error code AND NO order ID (meaning payment truly failed before order creation)
+    if (location.pathname === '/order-confirmation' && errorCode && !orderId) {
+      // If we have an error code but no order ID, show the error immediately
+      const errorMessages: Record<string, string> = {
+        '-107': 'Payment was declined. Please check your payment method and try again.',
+        '107': 'Payment was declined. Please check your payment method and try again.',
+      }
+      const normalizedErrorCode = errorCode.startsWith('-') ? errorCode : `-${errorCode}`
+      const message = errorMessage || errorMessages[errorCode] || errorMessages[normalizedErrorCode] || `Payment error (Code: ${errorCode}). Please try again or contact support.`
+      
+      setPaymentError({
+        code: normalizedErrorCode,
+        message: message,
+      })
+      return
+    }
+    
+    // Only process if we're on order-confirmation route with an id parameter
+    // and we don't already have order confirmation data set
+    // Process order loading FIRST (before error handling) to verify actual order status
+    // Note: OrderConfirmationPage component now fetches its own data, so this is for backward compatibility
+    if (location.pathname === '/order-confirmation' && orderId && !orderConfirmation) {
+      const verifyAndLoadOrder = async () => {
+        try {
+          setIsProcessing(true)
+          
+          // Error handling is done above, before this function is called
+          // If we reach here, there's no error code in the URL
+          
+          // Determine API base URL
+          const isLocalDev =
+            typeof window !== 'undefined' &&
+            (window.location.hostname === 'localhost' ||
+              window.location.hostname === '127.0.0.1')
+          const apiBaseUrl = isLocalDev
+            ? import.meta.env.VITE_API_URL || 'http://localhost:3000'
+            : typeof window !== 'undefined'
+              ? window.location.origin
+              : 'http://localhost:3000'
+
+          // First, try to load from localStorage (faster)
+          try {
+            const storedOrders = JSON.parse(localStorage.getItem('lct_orders') || '{}')
+            const orderKey = Object.keys(storedOrders).find(
+              key => storedOrders[key].orderId === orderId
+            )
+            
+            if (orderKey && storedOrders[orderKey]) {
+              const storedOrder = storedOrders[orderKey]
+              
+              // Verify payment status with backend
+              const verifyResponse = await fetch(`${apiBaseUrl}/api/orders/${orderId}/status`)
+              
+              if (verifyResponse.ok) {
+                const statusData = await verifyResponse.json()
+                
+                // If payment was successful, show confirmation
+                if (statusData.status === 'confirmed' || statusData.status === 'paid') {
+                  setOrderConfirmation({
+                    orderNumber: storedOrder.orderNumber,
+                    cartItems: storedOrder.cartItems,
+                    contactForm: storedOrder.contactForm || storedOrder.shippingForm, // Support legacy data
+                    cartSubtotal: storedOrder.cartSubtotal,
+                    estimatedTax: storedOrder.estimatedTax,
+                  })
+                  setIsProcessing(false)
+                  return
+                }
+              }
+            }
+          } catch (localError) {
+            console.warn('[Checkout] Failed to load from localStorage:', localError)
+          }
+
+          // Use the new secure order details endpoint (Task 3.7 & 3.8)
+          // This endpoint joins orders, order_items, and customers tables
+          const orderResponse = await fetch(`${apiBaseUrl}/api/order/details?orderId=${encodeURIComponent(orderId)}`)
+          
+          if (orderResponse.ok) {
+            const orderData = await orderResponse.json()
+            
+            // Check if order status indicates payment failure
+            if (orderData.status === 'cancelled' || orderData.status === 'failed') {
+              setPaymentError({
+                code: '-107',
+                message: 'Payment was declined. Your order was not processed. Please try again with a different payment method.',
+              })
+              setOrderConfirmation(null)
+              setIsProcessing(false)
+              return
+            }
+            
+            // Verify payment status - show confirmation if payment succeeded or order exists
+            // If order exists and is not explicitly cancelled/failed, show confirmation
+            // (pending orders might be in process, so don't show error unless explicitly failed)
+            if (orderData.status === 'confirmed' || orderData.status === 'paid' || orderData.status === 'pending' || orderData.status === 'OPEN') {
+              // Build shipping form data from order data
+              let contactFormData: any = {};
+              // For pickup orders, use pickup_details if available
+              if (orderData.pickup_details) {
+                contactFormData = {
+                  email: orderData.customer.email || orderData.pickup_details.email || '',
+                  firstName: orderData.customer.name.first || orderData.pickup_details.firstName || '',
+                  lastName: orderData.customer.name.last || orderData.pickup_details.lastName || '',
+                  phone: orderData.customer.phone || orderData.pickup_details.phone || '',
+                };
+              } else {
+                // Fallback: construct from customer data
+                contactFormData = {
+                  email: orderData.customer.email || '',
+                  firstName: orderData.customer.name.first || '',
+                  lastName: orderData.customer.name.last || '',
+                  phone: orderData.customer.phone || '',
+                };
+              }
+              
+              // Clear any payment error if order is confirmed (error code was false positive)
+              setPaymentError(null)
+              
+              // Set order confirmation - OrderConfirmationPage will fetch from endpoint itself
+              // But we set minimal data for backward compatibility
+              setOrderConfirmation({
+                orderNumber: orderData.order_number,
+                cartItems: orderData.items.map((item: any) => ({
+                  id: item.product_id,
+                  name: item.product_name || 'Product',
+                  price: item.price,
+                  quantity: item.quantity,
+                  imageUrl: item.image_url || '',
+                  category: item.category || '',
+                  stockCount: 0,
+                })),
+                contactForm: contactFormData,
+                cartSubtotal: orderData.subtotal,
+                estimatedTax: orderData.tax,
+              })
+            } else {
+              // Payment failed or pending - provide user-friendly error message
+              const statusMessages: Record<string, string> = {
+                'pending': 'Your payment is still being processed. Please wait a moment and refresh this page.',
+                'cancelled': 'Your payment was cancelled. Please try again.',
+                'failed': 'Payment failed. Please check your payment method and try again.',
+              }
+              
+              const message = statusMessages[orderData.status] || 
+                `Order status: ${orderData.status}. Payment may not have been completed.`
+              
+              alert(`Payment Issue: ${message}`)
+              navigate('/cart')
+            }
+          } else if (orderResponse.status === 404) {
+            // Order not found - might be a payment failure before order creation
+            alert('Order not found. This may indicate a payment issue. Please try again or contact support if the problem persists.')
+            navigate('/cart')
+          } else {
+            throw new Error(`Failed to fetch order: ${orderResponse.statusText}`)
+          }
+        } catch (error) {
+          console.error('[Checkout] Failed to verify order:', error)
+          alert('Failed to load order confirmation. Please contact support.')
+          navigate('/')
+        } finally {
+          setIsProcessing(false)
+        }
+      }
+
+      verifyAndLoadOrder()
+    }
+  }, [location.pathname, searchParams, orderConfirmation, navigate])
 
   // Navigation handlers using useNavigate
   const handleNavigate = {
@@ -185,42 +612,92 @@ function App() {
   const wishlistCount = effectiveWishlist.length
 
   const addToCart = (product: Product, quantity = 1) => {
+    // Test I-104: Stock Limit - Prevent adding more than available stock
+    if (product.stockCount <= 0) {
+      alert('This item is sold out and cannot be added to cart.')
+      return
+    }
+    
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === product.id)
-      if (existing) {
-        return prev.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item,
-        )
+      const currentQuantity = existing ? existing.quantity : 0
+      const newQuantity = currentQuantity + quantity
+      
+      // Check if adding this quantity would exceed available stock
+      if (newQuantity > product.stockCount) {
+        const available = product.stockCount - currentQuantity
+        if (available <= 0) {
+          alert('This item is sold out and cannot be added to cart.')
+          return prev
+        } else {
+          alert(`Inventory Limit Reached. Only ${available} ${available === 1 ? 'item' : 'items'} available.`)
+          // Add only the available quantity
+          const updated = prev.map((item) =>
+            item.id === product.id
+              ? { ...item, quantity: product.stockCount }
+              : item,
+          )
+          saveCartToDatabase(updated)
+          return updated
+        }
       }
-      return [...prev, { ...product, quantity }]
+      
+      const updated = existing
+        ? prev.map((item) =>
+            item.id === product.id
+              ? { ...item, quantity: newQuantity }
+              : item,
+          )
+        : [...prev, { ...product, quantity }]
+      
+      // P.4: Save to database if logged in
+      saveCartToDatabase(updated)
+      
+      return updated
     })
     setCartOpen(true)
   }
 
   const updateCartQuantity = (productId: string, quantity: number) => {
     const safeQuantity = Number.isFinite(quantity) ? quantity : 0
-    setCartItems((prev) =>
-      prev
-        .map((item) =>
-          item.id === productId
-            ? { ...item, quantity: Math.max(0, safeQuantity) }
-            : item,
-        )
-        .filter((item) => item.quantity > 0),
-    )
+    setCartItems((prev) => {
+      const updated = prev
+        .map((item) => {
+          if (item.id === productId) {
+            // Test I-104: Stock Limit - Prevent setting quantity above available stock
+            const maxQuantity = Math.min(safeQuantity, item.stockCount)
+            if (safeQuantity > item.stockCount) {
+              alert(`Inventory Limit Reached. Only ${item.stockCount} ${item.stockCount === 1 ? 'item' : 'items'} available.`)
+            }
+            return { ...item, quantity: Math.max(0, maxQuantity) }
+          }
+          return item
+        })
+        .filter((item) => item.quantity > 0)
+      
+      // P.4: Save to database if logged in
+      saveCartToDatabase(updated)
+      
+      return updated
+    })
   }
 
   const removeFromCart = (productId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== productId))
+    setCartItems((prev) => {
+      const updated = prev.filter((item) => item.id !== productId)
+      
+      // P.4: Save to database if logged in
+      saveCartToDatabase(updated)
+      
+      return updated
+    })
   }
 
   const cartSubtotal = cartItems.reduce(
     (total, item) => total + item.price * item.quantity,
     0,
   )
-  const estimatedShipping = cartSubtotal > 0 ? Math.max(5, cartSubtotal * 0.05) : 0
+  // Tax calculation for pickup orders
   const estimatedTax = cartSubtotal > 0 ? cartSubtotal * 0.0825 : 0
 
   const toggleWishlist = (product: Product) => {
@@ -238,6 +715,10 @@ function App() {
   }
 
   const shareWishlist = () => {
+    // Prevent sharing if wishlist is empty
+    if (effectiveWishlist.length === 0) {
+      return
+    }
     const names = effectiveWishlist.map((item) => item.name).join(', ')
     const payload = {
       title: 'My Local Commerce wishlist',
@@ -652,6 +1133,45 @@ function App() {
         <Route
           path="/privacy"
           element={<PrivacyTermsPage {...createPageProps()} />}
+        />
+
+        {/* Order Confirmation Route - fetches order data from URL parameter */}
+        <Route
+          path="/order-confirmation"
+          element={
+            <OrderConfirmationPage
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              orderTrackingEnabled={orderTrackingEnabled}
+              onViewOrderStatus={() => {
+                navigate('/order-lookup')
+              }}
+              onGoToDashboard={() => {
+                setDashboardOpen(true)
+                navigate('/')
+              }}
+              onContinueShopping={() => {
+                navigate('/')
+              }}
+              onSignIn={handleNavigate.toLogin}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => setPdpProduct(product)}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+            />
+          }
         />
 
         {/* Terms of Service Route */}
@@ -1330,29 +1850,13 @@ function App() {
             </div>
 
             <div className="border-t border-white/10 px-5 py-5 bg-black/80">
-              {/* Promo Code Field */}
-              <div className="mb-4 space-y-2">
-                <label className="text-xs uppercase tracking-[0.3em] text-slate-400">Promo Code</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter code"
-                    className="flex-1 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm text-white placeholder-slate-500 focus:border-primary focus:outline-none"
-                  />
-                  <button className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm text-white/80 hover:border-white/40">
-                    Apply
-                  </button>
-                </div>
-              </div>
+              {/* Promo codes are handled by Square's hosted checkout page */}
               <div className="space-y-2 text-sm text-slate-200">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
                   <span>{moneyFormatter.format(cartSubtotal)}</span>
                 </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Est. shipping (calculated at checkout)</span>
-                  <span>{moneyFormatter.format(estimatedShipping)}</span>
-                </div>
+                {/* Shipping not shown for pickup orders */}
                 <div className="flex justify-between text-slate-400">
                   <span>Est. taxes</span>
                   <span>{moneyFormatter.format(estimatedTax)}</span>
@@ -1362,46 +1866,121 @@ function App() {
                 Final shipping and taxes are confirmed during checkout once your address is
                 provided.
               </p>
-              <div className="mt-4 space-y-3">
+              <div className="mt-4">
                 <button
-                  className="w-full rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white shadow-brand"
-                  onClick={() => {
-                    setCartOpen(false)
-                    // Check checkout mode - if pickup only, skip shipping page
-                    const checkoutMode = (import.meta.env.VITE_CHECKOUT_MODE ?? 'both').toString().toLowerCase()
-                    if (checkoutMode === 'pickup') {
-                      // For pickup-only, create minimal shipping form and go to payment
-                      setShippingForm({
-                        deliveryMethod: 'pickup',
-                        email: '',
-                        firstName: '',
-                        lastName: '',
-                        phone: '',
-                        address: '',
-                        city: '',
-                        state: '',
-                        zipCode: '',
-                      })
-                      setCheckoutStep('payment')
-                    } else {
-                      // For delivery or both, show shipping page
-                      setCheckoutStep('shipping')
+                  className={`w-full rounded-full px-4 py-3 text-sm font-semibold text-white shadow-brand ${
+                    cartItems.length === 0
+                      ? 'cursor-not-allowed bg-slate-600/50 opacity-50'
+                      : 'bg-primary'
+                  }`}
+                  onClick={async () => {
+                    if (cartItems.length === 0) {
+                      return // Prevent checkout if cart is empty
                     }
+                    
+                    console.log('[Checkout] Button clicked, checking user:', {
+                      hasUser: !!user,
+                      userId: user?.id,
+                      isLoading,
+                    })
+                    
+                    // Check if user is authenticated and has all required info
+                    // If yes, skip shipping page and go directly to review
+                    if (user && user.id && !isLoading) {
+                      try {
+                        console.log('[Checkout] Fetching customer info from /api/auth/me')
+                        // Fetch full customer details to check if we have all info
+                        const response = await fetch('/api/auth/me', {
+                          method: 'GET',
+                          credentials: 'include',
+                        })
+                        
+                        console.log('[Checkout] API response status:', response.status)
+                        
+                        if (response.ok) {
+                          const data = await response.json()
+                          console.log('[Checkout] API response data:', data)
+                          
+                          if (data?.success && data.customer) {
+                            const customer = data.customer
+                            // Check if we have minimum required fields for pickup
+                            // Email and firstName are required, lastName and phone can be added on review if missing
+                            const hasRequiredInfo = 
+                              customer.email &&
+                              customer.firstName
+                            
+                            console.log('[Checkout] Customer info check:', {
+                              email: customer.email,
+                              firstName: customer.firstName,
+                              lastName: customer.lastName,
+                              phone: customer.phone,
+                              hasRequiredInfo,
+                            })
+                            
+                            if (hasRequiredInfo) {
+                              // Skip shipping page - go directly to review
+                              // Use available data, empty strings for missing fields (user can add on review if needed)
+                              const shippingFormData = {
+                                email: customer.email,
+                                firstName: customer.firstName,
+                                lastName: customer.lastName || '',
+                                phone: customer.phone || '',
+                                address: '',
+                                city: '',
+                                state: '',
+                                zipCode: '',
+                                deliveryMethod: 'pickup' as const,
+                              }
+                              
+                              console.log('[Checkout] User has complete info, skipping to review with form:', contactFormData)
+                              
+                              // Set form first, then step, then close cart
+                              setContactForm(contactFormData)
+                              // Use setTimeout to ensure state updates in correct order
+                              setTimeout(() => {
+                                setCheckoutStep('review')
+                                setCartOpen(false)
+                              }, 0)
+                              return
+                            } else {
+                              console.log('[Checkout] Missing required info, will show contact page')
+                              // Logged in user with incomplete info - show contact page to complete
+                              const contactFormData = {
+                                email: customer.email || '',
+                                firstName: customer.firstName || '',
+                                lastName: customer.lastName || '',
+                                phone: customer.phone || '',
+                              }
+                              setContactForm(contactFormData)
+                              setCheckoutStep('contact')
+                              setTimeout(() => setCartOpen(false), 0)
+                              return
+                            }
+                          } else {
+                            console.log('[Checkout] API response missing success or customer data')
+                          }
+                        } else {
+                          const errorText = await response.text()
+                          console.log('[Checkout] API response not OK:', response.status, errorText)
+                        }
+                      } catch (error) {
+                        console.error('[Checkout] Failed to check customer info:', error)
+                        // Fall through to show shipping page
+                      }
+                    } else {
+                      console.log('[Checkout] User not authenticated or still loading, will show shipping page')
+                    }
+                    
+                    // Default: show account selection page
+                    console.log('[Checkout] Showing account selection page')
+                    setCheckoutStep('account')
+                    // Close cart after a tiny delay to ensure checkout is visible first
+                    setTimeout(() => setCartOpen(false), 0)
                   }}
+                  disabled={cartItems.length === 0}
                 >
                   Continue to Checkout
                 </button>
-                {!user ? (
-                  <button
-                    className="w-full rounded-full border border-white/20 px-4 py-3 text-sm font-semibold text-white/80 hover:border-white/40"
-                    onClick={() => {
-                      setCartOpen(false)
-                      handleNavigate.toLogin()
-                    }}
-                  >
-                    Sign in for faster checkout
-                  </button>
-                ) : null}
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-400">
                 <span className="rounded-full bg-white/10 px-3 py-1 text-white/80">Visa</span>
@@ -1499,8 +2078,13 @@ function App() {
               </div>
               <div className="flex gap-2">
                 <button
-                  className="rounded-full border border-white/20 px-3 py-1 text-xs text-white/80"
+                  className={`rounded-full border px-3 py-1 text-xs ${
+                    effectiveWishlist.length === 0
+                      ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/40 opacity-50'
+                      : 'border-white/20 text-white/80 hover:border-white/40'
+                  }`}
                   onClick={shareWishlist}
+                  disabled={effectiveWishlist.length === 0}
                 >
                   Share
                 </button>
@@ -1584,57 +2168,139 @@ function App() {
         />
       ) : null}
 
-      {checkoutStep === 'shipping' ? (
-        <CheckoutShippingPage
+      {checkoutStep === 'account' ? (
+        <CheckoutAccountPage
           cartSubtotal={cartSubtotal}
-          estimatedShipping={estimatedShipping}
           estimatedTax={estimatedTax}
-          onNext={(form) => {
-            setShippingForm(form)
-            setCheckoutStep('payment')
+          user={user}
+          isLoading={isLoading}
+          cartCount={cartCount}
+          wishlistCount={wishlistCount}
+          wishlistFeatureEnabled={wishlistFeatureEnabled}
+          products={products}
+          orderTrackingEnabled={orderTrackingEnabled}
+          onContinueAsGuest={() => {
+            setCheckoutStep('contact')
+          }}
+          // Task 1.2: If logged in user reaches account page, redirect to review
+          onRedirectToReview={async () => {
+            if (user) {
+              try {
+                const response = await fetch('/api/auth/me', {
+                  method: 'GET',
+                  credentials: 'include',
+                })
+                const data = await response.json()
+                if (data?.success && data.customer) {
+                  setContactForm({
+                    email: data.customer.email,
+                    firstName: data.customer.firstName,
+                    lastName: data.customer.lastName,
+                    phone: data.customer.phone || '',
+                  })
+                  setCheckoutStep('review')
+                }
+              } catch (error) {
+                console.error('[App] Failed to fetch user data for redirect:', error)
+              }
+            }
+          }}
+          onSignIn={() => {
+            // Mark that we should return to checkout after login
+            sessionStorage.setItem('return_to_checkout', 'true')
+            handleNavigate.toLogin()
+          }}
+          onSignUp={() => {
+            // Mark that we should return to checkout after signup
+            sessionStorage.setItem('return_to_checkout', 'true')
+            handleNavigate.toSignUp()
           }}
           onCancel={() => {
             setCheckoutStep(null)
-            setShippingForm(null)
-            setPaymentForm(null)
+            setContactForm(null)
           }}
+          onSignOut={async () => {
+            await signOut()
+          }}
+          onAccount={handleNavigate.toDashboard}
+          onCart={() => setCartOpen(true)}
+          onWishlist={() => setWishlistOpen(true)}
+          onSearch={() => setSearchOpen(true)}
+          onProductSelect={(product) => setPdpProduct(product)}
+          onTrackOrder={handleNavigate.toTrackOrder}
+          onContactUs={handleNavigate.toContact}
+          onAboutUs={handleNavigate.toAbout}
+          onShippingReturns={handleNavigate.toShippingReturns}
+          onPrivacyPolicy={handleNavigate.toPrivacy}
+          onTermsOfService={handleNavigate.toTerms}
         />
       ) : null}
 
-      {checkoutStep === 'payment' && shippingForm ? (
-        <CheckoutPaymentPage
-          shippingForm={shippingForm}
+      {checkoutStep === 'contact' ? (
+        <CheckoutContactPage
           cartSubtotal={cartSubtotal}
-          estimatedShipping={estimatedShipping}
           estimatedTax={estimatedTax}
+          user={user}
+          isLoading={isLoading}
+          cartCount={cartCount}
+          wishlistCount={wishlistCount}
+          wishlistFeatureEnabled={wishlistFeatureEnabled}
+          products={products}
+          orderTrackingEnabled={orderTrackingEnabled}
           onNext={(form) => {
-            setPaymentForm(form)
+            setContactForm(form)
             setCheckoutStep('review')
           }}
-          onBack={() => setCheckoutStep('shipping')}
           onCancel={() => {
-            setCheckoutStep(null)
-            setShippingForm(null)
-            setPaymentForm(null)
+            // Go back to account selection
+            setCheckoutStep('account')
+            setContactForm(null)
           }}
+          onSignIn={() => {
+            // Mark that we should return to checkout after login
+            sessionStorage.setItem('return_to_checkout', 'true')
+            handleNavigate.toLogin()
+          }}
+          onSignOut={async () => {
+            await signOut()
+            // Stay on checkout page as guest
+          }}
+          onAccount={handleNavigate.toDashboard}
+          onCart={() => setCartOpen(true)}
+          onWishlist={() => setWishlistOpen(true)}
+          onSearch={() => setSearchOpen(true)}
+          onProductSelect={(product) => setPdpProduct(product)}
+          onTrackOrder={handleNavigate.toTrackOrder}
+          onContactUs={handleNavigate.toContact}
+          onAboutUs={handleNavigate.toAbout}
+          onShippingReturns={handleNavigate.toShippingReturns}
+          onPrivacyPolicy={handleNavigate.toPrivacy}
+          onTermsOfService={handleNavigate.toTerms}
         />
       ) : null}
 
-      {checkoutStep === 'review' && shippingForm && paymentForm ? (
+      {checkoutStep === 'review' && contactForm ? (
         <CheckoutReviewPage
           cartItems={cartItems}
-          shippingForm={shippingForm}
-          paymentForm={paymentForm}
+          contactForm={contactForm}
+          paymentForm={null} // No payment form - Square handles payment on their hosted page
           cartSubtotal={cartSubtotal}
-          estimatedShipping={estimatedShipping}
           estimatedTax={estimatedTax}
           customerId={user?.id || null}
+          user={user}
+          isLoading={isLoading}
+          cartCount={cartCount}
+          wishlistCount={wishlistCount}
+          wishlistFeatureEnabled={wishlistFeatureEnabled}
+          products={products}
+          orderTrackingEnabled={orderTrackingEnabled}
           onBack={() => {
-            const checkoutMode = (import.meta.env.VITE_CHECKOUT_MODE ?? 'both').toString().toLowerCase()
-            if (checkoutMode === 'pickup' || shippingForm?.deliveryMethod === 'pickup') {
-              setCheckoutStep('payment')
+            // If user is logged in, go back to account selection
+            // If guest, go back to contact form
+            if (user) {
+              setCheckoutStep('account')
             } else {
-              setCheckoutStep('payment')
+              setCheckoutStep('contact')
             }
           }}
           onComplete={async (checkoutPayload) => {
@@ -1677,35 +2343,36 @@ function App() {
             const orderResult = await response.json()
             console.log('[Checkout] Order created successfully:', orderResult)
 
-            // Extract order details from API response
-            const orderId = orderResult.order?.id
-            const orderNumber = orderResult.order?.order_number
-            const returnUrls = orderResult.return_urls
-            const checkoutPageUrl = orderResult.checkout_page_url // Extract checkout page URL
+            // Extract checkout URL and Square order ID from simplified response
+            // Response format: { "url": "...", "square_order_id": "..." }
+            const checkoutUrl = orderResult.url
+            const squareOrderId = orderResult.square_order_id
 
-            if (!orderId || !orderNumber) {
-              throw new Error('Invalid response from checkout API')
+            if (!checkoutUrl) {
+              throw new Error('Invalid response from checkout API: missing checkout URL')
             }
 
-            // Store order data locally (before redirect)
+            // Store minimal order data locally (before redirect)
+            // We'll load full order details when Square redirects back
             const completedOrderItems = [...cartItems]
-            const completedShippingForm = { ...shippingForm }
+            const completedContactForm = { ...contactForm }
+
+            // Generate a temporary order number for localStorage key
+            // The actual order number will be retrieved from the database on return
+            const tempOrderKey = `temp-${Date.now()}-${squareOrderId?.substring(0, 8)}`
 
             const orderData = {
-              orderNumber,
-              orderId, // Neon database ID
+              squareOrderId, // Store Square order ID for lookup
               cartItems: completedOrderItems,
-              shippingForm: completedShippingForm,
+              contactForm: completedContactForm,
               cartSubtotal,
-              estimatedShipping,
               estimatedTax,
               checkoutPayload,
-              returnUrls, // Store return URLs for Square redirect
             }
 
             try {
               const storedOrders = JSON.parse(localStorage.getItem('lct_orders') || '{}')
-              storedOrders[orderNumber.toLowerCase()] = orderData
+              storedOrders[tempOrderKey] = orderData
               localStorage.setItem('lct_orders', JSON.stringify(storedOrders))
             } catch (e) {
               console.error('Failed to store order locally', e)
@@ -1714,21 +2381,13 @@ function App() {
             // Clear checkout state
             setCheckoutStep(null)
             setCartItems([])
-            setShippingForm(null)
-            setPaymentForm(null)
+            setContactForm(null)
 
-            // Execute redirect: If Square checkout page URL is available, redirect immediately
-            if (checkoutPageUrl) {
-              console.log('[Checkout] Received checkout_page_url, redirecting to Square checkout:', checkoutPageUrl)
-              // Immediately redirect user's browser to Square checkout page
-              window.location.href = checkoutPageUrl
-              return // Exit early - don't set order confirmation yet, wait for Square redirect back
-            }
-
-            // Fallback: If no checkout URL, proceed to order confirmation
-            // This happens if Square order/checkout creation failed
-            console.warn('[Checkout] No checkout_page_url received, proceeding to order confirmation')
-            setOrderConfirmation(orderData)
+            // Execute immediate redirect to Square-hosted checkout page
+            // This page automatically includes Apple Pay, Google Pay, and other digital wallets
+            console.log('[Checkout] Redirecting to Square checkout:', checkoutUrl)
+            window.location.href = checkoutUrl
+            // Note: Code execution stops here - Square will redirect back to return_url_success
 
             } catch (error) {
               console.error('[Checkout] Failed to create order:', error)
@@ -1742,27 +2401,52 @@ function App() {
           }}
           onCancel={() => {
             setCheckoutStep(null)
-            setShippingForm(null)
-            setPaymentForm(null)
+            setContactForm(null)
           }}
         />
+      ) : null}
+
+      {/* Show payment error only if no order ID (payment failed before order creation) */}
+      {/* If we have an order ID, let OrderConfirmationPage component handle it */}
+      {paymentError && location.pathname === '/order-confirmation' && !orderId ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
+          <div className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-4 py-8">
+            <div className="rounded-2xl border border-red-500/50 bg-red-500/10 p-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+                <svg className="h-8 w-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <h1 className="mb-2 text-2xl font-semibold text-red-400">Payment Failed</h1>
+              <p className="mb-6 text-slate-300">{paymentError.message}</p>
+              <p className="mb-6 text-xs text-slate-400">Error Code: {paymentError.code}</p>
+              <button
+                onClick={() => {
+                  setPaymentError(null)
+                  navigate('/cart')
+                }}
+                className="rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-brand hover:bg-primary/90"
+              >
+                Return to Cart
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {orderConfirmation ? (
         <OrderConfirmationPage
           orderNumber={orderConfirmation.orderNumber}
           cartItems={orderConfirmation.cartItems}
-          shippingForm={orderConfirmation.shippingForm}
+          contactForm={orderConfirmation.contactForm}
           cartSubtotal={orderConfirmation.cartSubtotal}
-          estimatedShipping={orderConfirmation.estimatedShipping}
           estimatedTax={orderConfirmation.estimatedTax}
           onViewOrderStatus={() => {
             setOrderStatusView({
               orderNumber: orderConfirmation.orderNumber,
               cartItems: orderConfirmation.cartItems,
-              shippingForm: orderConfirmation.shippingForm,
+              contactForm: orderConfirmation.contactForm,
               cartSubtotal: orderConfirmation.cartSubtotal,
-              estimatedShipping: orderConfirmation.estimatedShipping,
               estimatedTax: orderConfirmation.estimatedTax,
             })
             setOrderConfirmation(null)
@@ -1795,9 +2479,8 @@ function App() {
         <OrderStatusPage
           orderNumber={orderStatusView.orderNumber}
           cartItems={orderStatusView.cartItems}
-          shippingForm={orderStatusView.shippingForm}
+          contactForm={orderStatusView.contactForm}
           cartSubtotal={orderStatusView.cartSubtotal}
-          estimatedShipping={orderStatusView.estimatedShipping}
           estimatedTax={orderStatusView.estimatedTax}
           currentStatus="confirmed"
           trackingNumber={undefined}
@@ -1815,9 +2498,8 @@ function App() {
             setOrderStatusView({
               orderNumber: order.orderNumber,
               cartItems: order.cartItems,
-              shippingForm: order.shippingForm,
+              contactForm: order.contactForm || order.shippingForm, // Support legacy data
               cartSubtotal: order.cartSubtotal,
-              estimatedShipping: order.estimatedShipping,
               estimatedTax: order.estimatedTax,
             })
           }}

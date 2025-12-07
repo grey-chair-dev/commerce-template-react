@@ -15,7 +15,75 @@
     "api/checkout/create.js": {
       "memory": 512,
       "maxDuration": 30
-    }
+    },
+    "api/orders/[orderId].js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/orders/[orderId]/status.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/orders/[orderId]/items.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/auth/register.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/auth/login.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/auth/me.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/auth/logout.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/order/details.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/cart.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/sync-cart.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/monitoring/neon-health.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/monitoring/inventory-sync-check.js": {
+      "memory": 512,
+      "maxDuration": 60
+    },
+        "api/monitoring/order-reconciliation-check.js": {
+          "memory": 512,
+          "maxDuration": 60
+        },
+        "api/monitoring/square-health.js": {
+          "memory": 512,
+          "maxDuration": 30
+        },
+        "api/monitoring/esp-health.js": {
+          "memory": 512,
+          "maxDuration": 30
+        },
+        "api/monitoring/cart-abandonment.js": {
+          "memory": 512,
+          "maxDuration": 30
+        },
+        "api/monitoring/auth-failure-rate.js": {
+          "memory": 512,
+          "maxDuration": 30
+        }
   },
   "rewrites": [
     {
@@ -26,14 +94,120 @@
       "source": "/api/webhooks/square-order-paid",
       "destination": "/api/webhooks/square-order-paid.js"
     },
-            {
-              "source": "/api/catalog/products",
-              "destination": "/api/catalog/products.js"
-            },
-            {
-              "source": "/api/checkout/create",
-              "destination": "/api/checkout/create.js"
-            }
+    {
+      "source": "/api/catalog/products",
+      "destination": "/api/catalog/products.js"
+    },
+    {
+      "source": "/api/checkout/create",
+      "destination": "/api/checkout/create.js"
+    },
+    {
+      "source": "/api/orders/:orderId",
+      "destination": "/api/orders/[orderId].js"
+    },
+    {
+      "source": "/api/orders/:orderId/status",
+      "destination": "/api/orders/[orderId]/status.js"
+    },
+    {
+      "source": "/api/orders/:orderId/items",
+      "destination": "/api/orders/[orderId]/items.js"
+    },
+    {
+      "source": "/api/auth/register",
+      "destination": "/api/auth/register.js"
+    },
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/auth/login.js"
+    },
+    {
+      "source": "/api/auth/me",
+      "destination": "/api/auth/me.js"
+    },
+    {
+      "source": "/api/auth/logout",
+      "destination": "/api/auth/logout.js"
+    },
+    {
+      "source": "/api/order/details",
+      "destination": "/api/order/details.js"
+    },
+    {
+      "source": "/api/user/cart",
+      "destination": "/api/user/cart.js"
+    },
+    {
+      "source": "/api/user/sync-cart",
+      "destination": "/api/user/sync-cart.js"
+    },
+        {
+          "source": "/api/webhooks/slack-alert",
+          "destination": "/api/webhooks/slack-alert.js"
+        },
+        {
+          "source": "/api/monitoring/neon-health",
+          "destination": "/api/monitoring/neon-health.js"
+        },
+        {
+          "source": "/api/monitoring/inventory-sync-check",
+          "destination": "/api/monitoring/inventory-sync-check.js"
+        },
+        {
+          "source": "/api/monitoring/order-reconciliation-check",
+          "destination": "/api/monitoring/order-reconciliation-check.js"
+        },
+        {
+          "source": "/api/monitoring/debug",
+          "destination": "/api/monitoring/debug.js"
+        },
+        {
+          "source": "/api/monitoring/square-health",
+          "destination": "/api/monitoring/square-health.js"
+        },
+        {
+          "source": "/api/monitoring/esp-health",
+          "destination": "/api/monitoring/esp-health.js"
+        },
+        {
+          "source": "/api/monitoring/cart-abandonment",
+          "destination": "/api/monitoring/cart-abandonment.js"
+        },
+        {
+          "source": "/api/monitoring/auth-failure-rate",
+          "destination": "/api/monitoring/auth-failure-rate.js"
+        }
+  ],
+  "crons": [
+    {
+      "path": "/api/monitoring/neon-health",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/monitoring/inventory-sync-check",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/monitoring/order-reconciliation-check",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/monitoring/square-health",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/monitoring/esp-health",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/monitoring/cart-abandonment",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/monitoring/auth-failure-rate",
+      "schedule": "0 8 * * *"
+    }
   ]
 }
 

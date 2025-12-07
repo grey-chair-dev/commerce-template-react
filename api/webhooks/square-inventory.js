@@ -214,17 +214,27 @@ async function processInventoryCountUpdate(pool, event) {
     console.log(`✅ Database updated: ${updatedProduct.name || square_variation_id} → stock_count: ${updatedProduct.stock_count}`);
     
     // Create inventory record for audit trail
-    // NOTE: We set quantity_change = 0 to prevent the trigger from modifying stock_count again
-    // The trigger updates stock_count by ADDING quantity_change, which would double-count since
-    // we already updated stock_count directly above to the exact value from Square.
+    // Store the actual quantity_change value for accurate audit trail
+    // NOTE: We temporarily disable the trigger to prevent double-counting since we already
+    // updated stock_count directly above to the exact value from Square.
     if (quantityChange !== 0) {
       const reason = quantityChange > 0 ? 'restock' : 'sale';
       const notes = `Square webhook: ${state} state. Previous: ${currentStock}, New: ${new_count_num} (change: ${quantityChange > 0 ? '+' : ''}${quantityChange})`;
       
-      await client.query(`
-        INSERT INTO inventory (product_id, quantity_change, reason, notes, created_at)
-        VALUES ($1, $2, $3, $4, NOW())
-      `, [square_variation_id, 0, reason, notes]); // Set to 0 to prevent trigger from double-counting
+      // Temporarily disable the trigger to prevent it from modifying stock_count
+      // (we already updated it directly above to the exact value from Square)
+      await client.query('ALTER TABLE inventory DISABLE TRIGGER update_stock_from_inventory');
+      
+      try {
+        // Insert with the actual quantity_change value for accurate audit trail
+        await client.query(`
+          INSERT INTO inventory (product_id, quantity_change, reason, notes, created_at)
+          VALUES ($1, $2, $3, $4, NOW())
+        `, [square_variation_id, quantityChange, reason, notes]);
+      } finally {
+        // Re-enable the trigger after insert
+        await client.query('ALTER TABLE inventory ENABLE TRIGGER update_stock_from_inventory');
+      }
     }
     
     await client.query('COMMIT');
@@ -469,13 +479,44 @@ export default async function handler(req, res) {
     });
     
   } catch (error) {
-    console.error('Webhook handler error:', error);
-    console.error('Error stack:', error.stack);
-    console.error('Error details:', {
-      message: error.message,
+    // Generate unique error ID for Slack alerts and log correlation
+    const errorId = `err_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const timestamp = new Date().toISOString();
+    const route = '/api/webhooks/square-inventory';
+    
+    // Log error with context for Slack alerts
+    console.error(`[${route}] Error ID: ${errorId}`, {
+      error: error.message,
+      stack: error.stack,
+      timestamp,
+      route,
+      statusCode: 500,
+      errorId,
       name: error.name,
       code: error.code,
     });
+    
+    // Send alert to Slack (non-blocking - don't wait for response)
+    if (process.env.SLACK_WEBHOOK_URL) {
+      const baseUrl = process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}` 
+        : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+      
+      fetch(`${baseUrl}/api/webhooks/slack-alert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          route,
+          errorId,
+          timestamp,
+          errorMessage: error.message || 'Internal server error',
+          statusCode: 500,
+        }),
+      }).catch(err => {
+        console.error('[Slack Alert] Failed to send alert:', err);
+        // Don't throw - we don't want Slack failures to break the error response
+      });
+    }
     
     // Provide more helpful error messages
     let errorMessage = error.message || 'Internal server error';
@@ -493,6 +534,9 @@ export default async function handler(req, res) {
     return res.status(statusCode).json({
       error: 'Internal server error',
       message: errorMessage,
+      errorId, // Include error ID in response for debugging
+      timestamp,
+      route,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }

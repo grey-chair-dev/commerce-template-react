@@ -1,14 +1,13 @@
 import type { CartItem } from './CheckoutReviewPage'
 import { moneyFormatter } from '../formatters'
+import { Header } from './Header'
+import { Footer } from './Footer'
+import type { Product } from '../dataAdapter'
 
-type ShippingForm = {
+type ContactForm = {
   email: string
   firstName: string
   lastName: string
-  address: string
-  city: string
-  state: string
-  zipCode: string
   phone: string
 }
 
@@ -17,15 +16,34 @@ type OrderStatus = 'confirmed' | 'packed' | 'shipped' | 'delivered'
 type OrderStatusPageProps = {
   orderNumber: string
   cartItems: CartItem[]
-  shippingForm: ShippingForm
+  contactForm: ContactForm
   cartSubtotal: number
-  estimatedShipping: number
   estimatedTax: number
   currentStatus: OrderStatus
   trackingNumber?: string
   estimatedDeliveryDate?: string
+  user?: any
+  isLoading?: boolean
+  cartCount?: number
+  wishlistCount?: number
+  wishlistFeatureEnabled?: boolean
+  products?: Product[]
+  orderTrackingEnabled?: boolean
   onBack: () => void
   onContactSupport?: () => void
+  onSignIn?: () => void
+  onSignOut?: () => void
+  onAccount?: () => void
+  onCart?: () => void
+  onWishlist?: () => void
+  onSearch?: () => void
+  onProductSelect?: (product: Product) => void
+  onTrackOrder?: () => void
+  onContactUs?: () => void
+  onAboutUs?: () => void
+  onShippingReturns?: () => void
+  onPrivacyPolicy?: () => void
+  onTermsOfService?: () => void
 }
 
 const statusSteps: { key: OrderStatus; label: string; description: string }[] = [
@@ -38,22 +56,58 @@ const statusSteps: { key: OrderStatus; label: string; description: string }[] = 
 export function OrderStatusPage({
   orderNumber,
   cartItems,
-  shippingForm,
+  contactForm,
   cartSubtotal,
-  estimatedShipping,
   estimatedTax,
   currentStatus,
   trackingNumber,
   estimatedDeliveryDate,
+  user,
+  isLoading = false,
+  cartCount = 0,
+  wishlistCount = 0,
+  wishlistFeatureEnabled = false,
+  products = [],
+  orderTrackingEnabled = false,
   onBack,
   onContactSupport,
+  onSignIn,
+  onSignOut,
+  onAccount,
+  onCart,
+  onWishlist,
+  onSearch,
+  onProductSelect,
+  onTrackOrder,
+  onContactUs,
+  onAboutUs,
+  onShippingReturns,
+  onPrivacyPolicy,
+  onTermsOfService,
 }: OrderStatusPageProps) {
   const currentStatusIndex = statusSteps.findIndex((s) => s.key === currentStatus)
-  const total = cartSubtotal + estimatedShipping + estimatedTax
+  const total = cartSubtotal + estimatedTax
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
-      <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+      {/* Header */}
+      <Header
+        user={user}
+        isLoading={isLoading}
+        cartCount={cartCount}
+        wishlistCount={wishlistCount}
+        wishlistFeatureEnabled={wishlistFeatureEnabled}
+        products={products}
+        onSignIn={onSignIn || (() => {})}
+        onSignOut={onSignOut || (() => {})}
+        onAccount={onAccount || (() => {})}
+        onCart={onCart || (() => {})}
+        onWishlist={onWishlist || (() => {})}
+        onSearch={onSearch || (() => {})}
+        onProductSelect={onProductSelect || (() => {})}
+      />
+      
+      <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8 sm:px-6 lg:px-8 pt-40 sm:pt-48 md:pt-56">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -208,10 +262,6 @@ export function OrderStatusPage({
                   <span>{moneyFormatter.format(cartSubtotal)}</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span>Shipping</span>
-                  <span>{moneyFormatter.format(estimatedShipping)}</span>
-                </div>
-                <div className="flex justify-between text-slate-300">
                   <span>Tax</span>
                   <span>{moneyFormatter.format(estimatedTax)}</span>
                 </div>
@@ -222,19 +272,15 @@ export function OrderStatusPage({
               </div>
             </div>
 
-            {/* Shipping info */}
+            {/* Contact info */}
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <h2 className="mb-4 text-lg font-semibold">Shipping Address</h2>
+              <h2 className="mb-4 text-lg font-semibold">Contact Information</h2>
               <div className="space-y-1 text-sm text-slate-300">
                 <p>
-                  {shippingForm.firstName} {shippingForm.lastName}
+                  {contactForm.firstName} {contactForm.lastName}
                 </p>
-                <p>{shippingForm.address}</p>
-                <p>
-                  {shippingForm.city}, {shippingForm.state} {shippingForm.zipCode}
-                </p>
-                <p>{shippingForm.email}</p>
-                {shippingForm.phone && <p>{shippingForm.phone}</p>}
+                <p>{contactForm.email}</p>
+                {contactForm.phone && <p>{contactForm.phone}</p>}
               </div>
             </div>
           </div>
@@ -274,6 +320,17 @@ export function OrderStatusPage({
           </div>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer
+        orderTrackingEnabled={orderTrackingEnabled}
+        onTrackOrder={onTrackOrder || (() => {})}
+        onContactUs={onContactUs || (() => {})}
+        onAboutUs={onAboutUs}
+        onShippingReturns={onShippingReturns}
+        onPrivacyPolicy={onPrivacyPolicy}
+        onTermsOfService={onTermsOfService}
+      />
     </div>
   )
 }

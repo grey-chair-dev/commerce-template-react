@@ -26,9 +26,6 @@ type ShippingReturnsPageProps = {
   onTermsOfService?: () => void
 }
 
-const checkoutMode = (import.meta.env.VITE_CHECKOUT_MODE ?? 'both').toString().toLowerCase()
-const isPickupOnly = checkoutMode === 'pickup'
-const showShipping = !isPickupOnly
 
 export function ShippingReturnsPage({
   user,
@@ -76,12 +73,10 @@ export function ShippingReturnsPage({
           <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-semibold">
-              {isPickupOnly ? 'Returns Policy' : 'Shipping & Returns'}
+              Returns Policy
             </h1>
             <p className="mt-2 text-sm text-slate-400">
-              {isPickupOnly
-                ? 'Everything you need to know about returns'
-                : 'Everything you need to know about shipping and returns'}
+              Everything you need to know about returns
             </p>
           </div>
           <button
@@ -93,86 +88,6 @@ export function ShippingReturnsPage({
         </div>
 
         <div className="flex flex-1 flex-col gap-8">
-          {/* Shipping Section - Only show if not pickup-only */}
-          {showShipping && (
-            <section className="space-y-6">
-              <h2 className="text-2xl font-semibold">Shipping Information</h2>
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <h3 className="mb-4 text-lg font-semibold">Shipping Options</h3>
-              <div className="space-y-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary">
-                    1
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white">Standard Shipping</p>
-                    <p className="mt-1 text-sm text-slate-300">
-                      5-7 business days · Free on orders over $50
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary">
-                    2
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white">Express Shipping</p>
-                    <p className="mt-1 text-sm text-slate-300">
-                      2-3 business days · $9.99
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary">
-                    3
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white">Local Pickup</p>
-                    <p className="mt-1 text-sm text-slate-300">
-                      Available at {siteConfig.contact.location} · Free
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <h3 className="mb-4 text-lg font-semibold">Shipping Timeline</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-2 rounded-full bg-accent" />
-                  <p className="text-sm text-slate-300">
-                    <span className="font-semibold text-white">Order Placed:</span> We receive your
-                    order immediately
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-2 rounded-full bg-accent" />
-                  <p className="text-sm text-slate-300">
-                    <span className="font-semibold text-white">Processing:</span> 1-2 business days
-                    to prepare your order
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-2 rounded-full bg-accent" />
-                  <p className="text-sm text-slate-300">
-                    <span className="font-semibold text-white">Shipped:</span> You'll receive a
-                    tracking number via email
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="h-2 w-2 rounded-full bg-accent" />
-                  <p className="text-sm text-slate-300">
-                    <span className="font-semibold text-white">Delivered:</span> Estimated delivery
-                    based on your shipping method
-                  </p>
-                </div>
-              </div>
-            </div>
-            </section>
-          )}
-
           {/* Returns Section */}
           <section className="space-y-6">
             <h2 className="text-2xl font-semibold">Returns & Exchanges</h2>
@@ -229,8 +144,7 @@ export function ShippingReturnsPage({
                   <div className="flex-1">
                     <p className="font-semibold text-white">Package & Ship</p>
                     <p className="mt-1 text-sm text-slate-300">
-                      Package items in original packaging with tags attached. Use the provided
-                      shipping label and drop off at any carrier location.
+                      Package items in original packaging with tags attached. Bring them to our store location or follow the return instructions provided.
                     </p>
                   </div>
                 </div>
@@ -325,7 +239,7 @@ export function ShippingReturnsPage({
           <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
             <h3 className="mb-4 text-lg font-semibold">Need Help?</h3>
             <p className="mb-4 text-sm text-slate-300">
-              Questions about shipping or returns? Our team is here to help.
+              Questions about returns? Our team is here to help.
             </p>
             <div className="flex flex-wrap gap-3">
               <a

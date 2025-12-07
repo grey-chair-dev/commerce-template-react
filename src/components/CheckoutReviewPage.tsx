@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
-import { assembleCheckoutPayload, type ShippingForm as CheckoutShippingForm } from '../utils/checkoutPayload'
+import { assembleCheckoutPayload, type ContactForm } from '../utils/checkoutPayload'
+import { Header } from './Header'
+import { Footer } from './Footer'
 
 export type CartItem = Product & { quantity: number }
 
@@ -12,36 +14,72 @@ type PaymentForm = {
   cardholderName: string
 }
 
-type ShippingForm = CheckoutShippingForm
-
 type CheckoutReviewPageProps = {
   cartItems: CartItem[]
-  shippingForm: ShippingForm
-  paymentForm: PaymentForm
+  contactForm: ContactForm
+  paymentForm: PaymentForm | null // Null when using Square hosted checkout
   cartSubtotal: number
-  estimatedShipping: number
   estimatedTax: number
   customerId?: string | null
+  user?: any
+  isLoading?: boolean
+  cartCount?: number
+  wishlistCount?: number
+  wishlistFeatureEnabled?: boolean
+  products?: Product[]
+  orderTrackingEnabled?: boolean
   onBack: () => void
   onComplete: (payload?: ReturnType<typeof assembleCheckoutPayload>) => void
   onCancel: () => void
+  onSignIn?: () => void
+  onSignOut?: () => void
+  onAccount?: () => void
+  onCart?: () => void
+  onWishlist?: () => void
+  onSearch?: () => void
+  onProductSelect?: (product: Product) => void
+  onTrackOrder?: () => void
+  onContactUs?: () => void
+  onAboutUs?: () => void
+  onShippingReturns?: () => void
+  onPrivacyPolicy?: () => void
+  onTermsOfService?: () => void
 }
 
 export function CheckoutReviewPage({
   cartItems,
-  shippingForm,
+  contactForm,
   paymentForm,
   cartSubtotal,
-  estimatedShipping,
   estimatedTax,
   customerId = null,
+  user,
+  isLoading = false,
+  cartCount = 0,
+  wishlistCount = 0,
+  wishlistFeatureEnabled = false,
+  products = [],
+  orderTrackingEnabled = false,
   onBack,
   onComplete,
   onCancel,
+  onSignIn,
+  onSignOut,
+  onAccount,
+  onCart,
+  onWishlist,
+  onSearch,
+  onProductSelect,
+  onTrackOrder,
+  onContactUs,
+  onAboutUs,
+  onShippingReturns,
+  onPrivacyPolicy,
+  onTermsOfService,
 }: CheckoutReviewPageProps) {
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const total = cartSubtotal + estimatedShipping + estimatedTax
+  const total = cartSubtotal + estimatedTax
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,9 +89,8 @@ export function CheckoutReviewPage({
       // Assemble checkout payload
       const checkoutPayload = assembleCheckoutPayload(
         cartItems,
-        shippingForm,
+        contactForm,
         cartSubtotal,
-        estimatedShipping,
         estimatedTax,
         customerId || null,
       )
@@ -66,22 +103,39 @@ export function CheckoutReviewPage({
       onComplete(checkoutPayload)
     } catch (error) {
       console.error('[Checkout] Error assembling payload:', error)
-      setIsProcessing(false)
+    setIsProcessing(false)
       // Still call onComplete to allow error handling in parent
       onComplete(undefined)
     }
   }
 
   const steps = [
-    { key: 'shipping', label: 'Shipping' },
-    { key: 'payment', label: 'Payment' },
+    { key: 'account', label: 'Account' },
+    { key: 'contact', label: 'Contact' },
     { key: 'review', label: 'Review' },
   ]
   const currentStepIndex = 2
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
-      <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+      {/* Header */}
+      <Header
+        user={user}
+        isLoading={isLoading}
+        cartCount={cartCount}
+        wishlistCount={wishlistCount}
+        wishlistFeatureEnabled={wishlistFeatureEnabled}
+        products={products}
+        onSignIn={onSignIn || (() => {})}
+        onSignOut={onSignOut || (() => {})}
+        onAccount={onAccount || (() => {})}
+        onCart={onCart || (() => {})}
+        onWishlist={onWishlist || (() => {})}
+        onSearch={onSearch || (() => {})}
+        onProductSelect={onProductSelect || (() => {})}
+      />
+      
+      <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8 sm:px-6 lg:px-8 pt-40 sm:pt-48 md:pt-56">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -132,10 +186,10 @@ export function CheckoutReviewPage({
         <div className="flex flex-1 flex-col gap-8 lg:flex-row">
           {/* Main content */}
           <div className="flex-1 space-y-6">
-            {/* Shipping summary */}
+            {/* Contact Information (for pickup orders) */}
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Shipping Information</h2>
+                <h2 className="text-lg font-semibold">Contact Information</h2>
                 <button
                   className="text-sm text-primary hover:text-primary/80"
                   onClick={onBack}
@@ -145,36 +199,46 @@ export function CheckoutReviewPage({
               </div>
               <div className="mt-4 space-y-1 text-sm text-slate-300">
                 <p>
-                  {shippingForm.firstName} {shippingForm.lastName}
+                  {contactForm.firstName} {contactForm.lastName}
                 </p>
-                <p>{shippingForm.address}</p>
-                <p>
-                  {shippingForm.city}, {shippingForm.state} {shippingForm.zipCode}
+                <p>{contactForm.email}</p>
+                {contactForm.phone && <p>{contactForm.phone}</p>}
+                <p className="mt-2 text-xs text-slate-400">
+                  We'll notify you when your order is ready for pickup.
                 </p>
-                <p>{shippingForm.email}</p>
-                {shippingForm.phone && <p>{shippingForm.phone}</p>}
               </div>
             </div>
 
-            {/* Payment summary */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Payment Method</h2>
-                <button
-                  className="text-sm text-primary hover:text-primary/80"
-                  onClick={onBack}
-                >
-                  Edit
-                </button>
+            {/* Payment summary - only show if payment form exists (not using Square hosted checkout) */}
+            {paymentForm ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Payment Method</h2>
+                  <button
+                    className="text-sm text-primary hover:text-primary/80"
+                    onClick={onBack}
+                  >
+                    Edit
+                  </button>
+                </div>
+                <div className="mt-4 space-y-1 text-sm text-slate-300">
+                  <p>{paymentForm.cardholderName}</p>
+                  <p>
+                    •••• •••• •••• {paymentForm.cardNumber.replace(/\s/g, '').slice(-4) || '****'}
+                  </p>
+                  <p>Expires {paymentForm.expiryDate}</p>
+                </div>
               </div>
-              <div className="mt-4 space-y-1 text-sm text-slate-300">
-                <p>{paymentForm.cardholderName}</p>
-                <p>
-                  •••• •••• •••• {paymentForm.cardNumber.replace(/\s/g, '').slice(-4) || '****'}
-                </p>
-                <p>Expires {paymentForm.expiryDate}</p>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Payment Method</h2>
+                </div>
+                <div className="mt-4 text-sm text-slate-300">
+                  <p>You'll enter your payment information on the secure Square checkout page.</p>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Order items */}
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -233,10 +297,6 @@ export function CheckoutReviewPage({
                   <span>{moneyFormatter.format(cartSubtotal)}</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span>Shipping</span>
-                  <span>{moneyFormatter.format(estimatedShipping)}</span>
-                </div>
-                <div className="flex justify-between text-slate-300">
                   <span>Tax</span>
                   <span>{moneyFormatter.format(estimatedTax)}</span>
                 </div>
@@ -249,6 +309,17 @@ export function CheckoutReviewPage({
           </div>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer
+        orderTrackingEnabled={orderTrackingEnabled}
+        onTrackOrder={onTrackOrder || (() => {})}
+        onContactUs={onContactUs || (() => {})}
+        onAboutUs={onAboutUs}
+        onShippingReturns={onShippingReturns}
+        onPrivacyPolicy={onPrivacyPolicy}
+        onTermsOfService={onTermsOfService}
+      />
     </div>
   )
 }

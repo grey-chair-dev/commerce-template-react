@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS customers (
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     phone VARCHAR(20),
+    password_hash VARCHAR(255), -- bcrypt hashed password for email/password auth
     auth_user_id VARCHAR(255), -- References auth.users if using Neon Auth
     default_shipping_address JSONB,
     preferences JSONB, -- Store customer preferences (newsletter, notifications, etc.)
@@ -61,10 +62,11 @@ CREATE TABLE IF NOT EXISTS orders (
     shipping DECIMAL(10, 2) DEFAULT 0,
     tax DECIMAL(10, 2) DEFAULT 0,
     total DECIMAL(10, 2) NOT NULL,
-    shipping_method VARCHAR(50), -- 'delivery', 'pickup'
+    shipping_method VARCHAR(50) DEFAULT 'pickup', -- 'delivery', 'pickup' (default to pickup)
     tracking_number VARCHAR(255),
     estimated_delivery_date DATE,
-    shipping_address JSONB,
+    shipping_address JSONB, -- NULL for pickup orders
+    pickup_details JSONB, -- Store pickup customer info: { firstName, lastName, email, phone }
     payment_method VARCHAR(50),
     square_order_id VARCHAR(255), -- Reference to Square order if integrated
     square_payment_id VARCHAR(255), -- Reference to Square payment

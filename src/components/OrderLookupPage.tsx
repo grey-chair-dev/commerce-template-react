@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import type { CartItem } from './CheckoutReviewPage'
+import { Header } from './Header'
+import { Footer } from './Footer'
+import type { Product } from '../dataAdapter'
 
 type OrderLookupPageProps = {
   onBack: () => void
@@ -12,12 +15,56 @@ type OrderLookupPageProps = {
     estimatedTax: number
   }) => void
   onContactSupport?: () => void
+  user?: any
+  isLoading?: boolean
+  cartCount?: number
+  wishlistCount?: number
+  wishlistFeatureEnabled?: boolean
+  products?: Product[]
+  orderTrackingEnabled?: boolean
+  onSignIn?: () => void
+  onSignOut?: () => void
+  onAccount?: () => void
+  onCart?: () => void
+  onWishlist?: () => void
+  onSearch?: () => void
+  onProductSelect?: (product: Product) => void
+  onTrackOrder?: () => void
+  onContactUs?: () => void
+  onAboutUs?: () => void
+  onShippingReturns?: () => void
+  onPrivacyPolicy?: () => void
+  onTermsOfService?: () => void
 }
 
 // Mock order storage - in production, this would be fetched from an API
 const mockOrders: Record<string, any> = {}
 
-export function OrderLookupPage({ onBack, onOrderFound, onContactSupport }: OrderLookupPageProps) {
+export function OrderLookupPage({
+  onBack,
+  onOrderFound,
+  onContactSupport,
+  user,
+  isLoading = false,
+  cartCount = 0,
+  wishlistCount = 0,
+  wishlistFeatureEnabled = false,
+  products = [],
+  orderTrackingEnabled = false,
+  onSignIn,
+  onSignOut,
+  onAccount,
+  onCart,
+  onWishlist,
+  onSearch,
+  onProductSelect,
+  onTrackOrder,
+  onContactUs,
+  onAboutUs,
+  onShippingReturns,
+  onPrivacyPolicy,
+  onTermsOfService,
+}: OrderLookupPageProps) {
   const [orderNumber, setOrderNumber] = useState('')
   const [email, setEmail] = useState('')
   const [isSearching, setIsSearching] = useState(false)
@@ -52,7 +99,24 @@ export function OrderLookupPage({ onBack, onOrderFound, onContactSupport }: Orde
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
-      <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6 lg:px-8">
+      {/* Header */}
+      <Header
+        user={user}
+        isLoading={isLoading}
+        cartCount={cartCount}
+        wishlistCount={wishlistCount}
+        wishlistFeatureEnabled={wishlistFeatureEnabled}
+        products={products}
+        onSignIn={onSignIn || (() => {})}
+        onSignOut={onSignOut || (() => {})}
+        onAccount={onAccount || (() => {})}
+        onCart={onCart || (() => {})}
+        onWishlist={onWishlist || (() => {})}
+        onSearch={onSearch || (() => {})}
+        onProductSelect={onProductSelect || (() => {})}
+      />
+      
+      <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6 lg:px-8 pt-40 sm:pt-48 md:pt-56">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
@@ -155,6 +219,17 @@ export function OrderLookupPage({ onBack, onOrderFound, onContactSupport }: Orde
           </div>
         </div>
       </div>
+      
+      {/* Footer */}
+      <Footer
+        orderTrackingEnabled={orderTrackingEnabled}
+        onTrackOrder={onTrackOrder || (() => {})}
+        onContactUs={onContactUs || (() => {})}
+        onAboutUs={onAboutUs}
+        onShippingReturns={onShippingReturns}
+        onPrivacyPolicy={onPrivacyPolicy}
+        onTermsOfService={onTermsOfService}
+      />
     </div>
   )
 }
