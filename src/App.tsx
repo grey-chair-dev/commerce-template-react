@@ -23,6 +23,10 @@ import { UserDashboard } from './components/UserDashboard'
 import { LoginPage } from './components/LoginPage'
 import { SignUpPage } from './components/SignUpPage'
 import { ForgotPasswordPage } from './components/ForgotPasswordPage'
+import { ResetPasswordPage } from './components/ResetPasswordPage'
+import { ProfilePage } from './components/ProfilePage'
+import { OrdersPage } from './components/OrdersPage'
+import { ReturnsPage } from './components/ReturnsPage'
 import { ContactUsPage } from './components/ContactUsPage'
 import { FAQPage } from './components/FAQPage'
 import { ShippingReturnsPage } from './components/ShippingReturnsPage'
@@ -81,23 +85,23 @@ const CookieBanner = ({
   onDismiss: () => void
 }) => (
   <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex max-w-3xl flex-col gap-3 rounded-2xl border border-white/20 bg-surface/90 p-4 text-sm text-slate-200 shadow-brand backdrop-blur">
-    <p className="font-semibold text-white">Cookies & telemetry</p>
+    <p className="font-semibold text-white">Spinning the Cookies</p>
     <p className="text-slate-300">
-      We use strictly necessary cookies plus optional analytics when enabled to measure latency
-      and reliability. Accept to allow storing anonymous metrics in your browser.
+      We're spinning some essential cookies (like your cart and login) plus optional analytics to keep the groove going. 
+      Accept to help us fine-tune the playlist and make your experience smoother. No personal data, just the beats.
     </p>
     <div className="flex flex-wrap gap-3">
       <button
-        className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white shadow-brand"
+        className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white shadow-brand hover:bg-primary/90 transition-colors"
         onClick={onAccept}
       >
-        Accept
+        Drop the Needle
       </button>
       <button
-        className="rounded-full border border-white/30 px-5 py-2 text-sm font-semibold text-white/80"
+        className="rounded-full border border-white/30 px-5 py-2 text-sm font-semibold text-white/80 hover:border-white/50 transition-colors"
         onClick={onDismiss}
       >
-        Not now
+        Skip This Track
       </button>
     </div>
   </div>
@@ -125,6 +129,7 @@ function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [wishlist, setWishlist] = useState<Product[]>([])
   const [isCartSyncing, setIsCartSyncing] = useState(false)
+  const lastSyncedUserIdRef = useRef<string | null>(null)
   const [isCartOpen, setCartOpen] = useState(false)
   const [isWishlistOpen, setWishlistOpen] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<'account' | 'contact' | 'review' | null>(null)
@@ -147,16 +152,26 @@ function App() {
     cartSubtotal: number
     estimatedTax: number
   } | null>(null)
-  const [isOrderLookupOpen, setOrderLookupOpen] = useState(false)
   const [isDashboardOpen, setDashboardOpen] = useState(false)
   const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
 
   // P.2: Load cart from localStorage on app initialization (after products are loaded)
+  // For guest users only - logged-in users load from database in P.3
   useEffect(() => {
-    // Only load cart if products are available and we haven't loaded it yet
-    if (products.length === 0 || cartItems.length > 0) {
+    // Wait for auth to finish loading and products to be available
+    if (isLoading || products.length === 0) {
+      return
+    }
+
+    // Skip if user is logged in (will load from database instead)
+    if (user && user.id) {
+      return
+    }
+
+    // Only load if cart is empty (to avoid overwriting)
+    if (cartItems.length > 0) {
       return
     }
 
@@ -189,7 +204,7 @@ function App() {
     } catch (error) {
       console.error('[Cart] Failed to load cart from localStorage:', error)
     }
-  }, [products]) // Run when products are loaded
+  }, [products, user, isLoading, cartItems.length]) // Run when products are loaded, user changes, or loading state changes
 
   // P.1: Save cart to localStorage on every change
   useEffect(() => {
@@ -215,13 +230,14 @@ function App() {
   // P.3: Sync cart with database when user logs in
   useEffect(() => {
     const syncCartOnLogin = async () => {
-      // Only sync if user is logged in and we're not already syncing
-      if (!user || !user.id || isCartSyncing) {
+      // Only sync if user is logged in, we're not already syncing, and we haven't synced for this user yet
+      if (!user || !user.id || isCartSyncing || lastSyncedUserIdRef.current === user.id) {
         return
       }
 
       try {
         setIsCartSyncing(true)
+        lastSyncedUserIdRef.current = user.id
         console.log('[Cart] User logged in, syncing cart with database...')
 
         // Get localStorage cart
@@ -241,7 +257,18 @@ function App() {
             if (data.success && data.cart && data.cart.length > 0) {
               console.log('[Cart] Loaded cart from database:', data.cart.length, 'items')
               setCartItems(data.cart)
+              
+              // Also save to localStorage for offline access
+              const cartData = data.cart.map((item: CartItem) => ({
+                sku: item.id,
+                quantity: item.quantity,
+              }))
+              localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
+            } else {
+              console.log('[Cart] No cart found in database')
             }
+          } else {
+            console.error('[Cart] Failed to load cart from database:', response.status)
           }
         } else {
           // Merge local cart with database cart
@@ -276,18 +303,33 @@ function App() {
         }
       } catch (error) {
         console.error('[Cart] Error syncing cart on login:', error)
+        // Reset ref on error so we can retry
+        if (lastSyncedUserIdRef.current === user.id) {
+          lastSyncedUserIdRef.current = null
+        }
       } finally {
         setIsCartSyncing(false)
       }
     }
 
     syncCartOnLogin()
-  }, [user, isCartSyncing])
+    
+    // Reset ref when user logs out
+    if (!user || !user.id) {
+      lastSyncedUserIdRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]) // Only depend on user.id, not isCartSyncing (which would cause infinite loop)
 
   // P.4: Save cart to database when logged in user makes changes
   const saveCartToDatabase = async (items: CartItem[]) => {
-    if (!user || !user.id || isCartSyncing) {
+    if (!user || !user.id) {
       return // Only save if user is logged in
+    }
+
+    // Don't save during initial sync to avoid race conditions
+    if (isCartSyncing) {
+      return
     }
 
     try {
@@ -297,8 +339,10 @@ function App() {
         quantity: item.quantity,
       }))
 
+      console.log('[Cart] Saving cart to database:', cartData.length, 'items')
+
       // Save to database asynchronously (don't block UI)
-      fetch('/api/user/cart', {
+      const response = await fetch('/api/user/cart', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -307,10 +351,14 @@ function App() {
         body: JSON.stringify({
           items: cartData,
         }),
-      }).catch((error) => {
-        console.error('[Cart] Failed to save cart to database:', error)
-        // Don't show error to user - localStorage is the fallback
       })
+
+      if (response.ok) {
+        console.log('[Cart] Successfully saved cart to database')
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('[Cart] Failed to save cart to database:', response.status, errorData)
+      }
     } catch (error) {
       console.error('[Cart] Error saving cart to database:', error)
     }
@@ -371,8 +419,8 @@ function App() {
         // Close auth page modal by navigating to home
         navigate('/')
       } else {
-        console.log('[App] User is authenticated, redirecting from', location.pathname, 'to home')
-        navigate('/')
+        console.log('[App] User is authenticated, redirecting from', location.pathname, 'to profile')
+        navigate('/profile')
       }
     }
   }, [user, isLoading, location.pathname, navigate, checkoutStep])
@@ -598,6 +646,7 @@ function App() {
     toAbout: () => navigate('/about'),
     toCatalog: () => navigate('/catalog'),
     toShippingReturns: () => navigate('/shipping-returns'),
+    toReturns: () => navigate('/returns'),
     toPrivacy: () => navigate('/privacy'),
     toTerms: () => navigate('/terms'),
     toDashboard: () => navigate('/dashboard'),
@@ -607,7 +656,36 @@ function App() {
     toTrackOrder: () => navigate('/order-lookup'),
     toHome: () => navigate('/'),
   }
-  const cartCount = cartItems.reduce((total, item) => total + item.quantity, 0)
+  // Calculate cart count from cartItems, or fallback to localStorage if products aren't loaded yet
+  const [cartCountFromStorage, setCartCountFromStorage] = useState(0)
+  
+  // Update cart count from localStorage when cartItems is empty (for auth pages before products load)
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      try {
+        const savedCart = localStorage.getItem(CART_STORAGE_KEY)
+        if (savedCart) {
+          const parsedCart = JSON.parse(savedCart)
+          if (Array.isArray(parsedCart)) {
+            const count = parsedCart.reduce((total: number, item: any) => total + (item.quantity || 0), 0)
+            setCartCountFromStorage(count)
+          } else {
+            setCartCountFromStorage(0)
+          }
+        } else {
+          setCartCountFromStorage(0)
+        }
+      } catch (error) {
+        setCartCountFromStorage(0)
+      }
+    } else {
+      setCartCountFromStorage(0) // Clear storage count when cartItems is loaded
+    }
+  }, [cartItems.length])
+
+  const cartCount = cartItems.length > 0 
+    ? cartItems.reduce((total, item) => total + item.quantity, 0)
+    : cartCountFromStorage
   const effectiveWishlist = wishlistFeatureEnabled ? wishlist : []
   const wishlistCount = effectiveWishlist.length
 
@@ -812,10 +890,11 @@ function App() {
     }
   }, [])
 
+  // Initialize client monitors (respects cookie consent)
   useEffect(() => {
     const teardown = initClientMonitors()
     return () => teardown()
-  }, [])
+  }, [showCookieBanner]) // Re-initialize when consent changes
 
   // Health check - only run if using WebSocket adapter, not for catalog API
   useEffect(() => {
@@ -1193,6 +1272,29 @@ function App() {
               onForgotPassword={() => navigate('/forgot-password')}
               onBack={() => navigate('/')}
               isLoading={isLoading}
+              user={user}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
             />
           }
         />
@@ -1209,6 +1311,29 @@ function App() {
               onSignIn={() => navigate('/login')}
               onBack={() => navigate('/')}
               isLoading={isLoading}
+              user={user}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
             />
           }
         />
@@ -1220,6 +1345,207 @@ function App() {
             <ForgotPasswordPage
               onBack={() => navigate('/login')}
               onSignIn={() => navigate('/login')}
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
+            />
+          }
+        />
+
+        {/* Reset Password Route */}
+        <Route
+          path="/reset-password"
+          element={
+            <ResetPasswordPage
+              onBack={() => navigate('/forgot-password')}
+              onSignIn={() => navigate('/login')}
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
+            />
+          }
+        />
+
+        {/* Profile Route */}
+        <Route
+          path="/profile"
+          element={
+            <ProfilePage
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
+            />
+          }
+        />
+
+        {/* Orders Route */}
+        <Route
+          path="/orders"
+          element={
+            <OrdersPage
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
+            />
+          }
+        />
+
+        {/* Returns Route */}
+        <Route
+          path="/returns"
+          element={
+            <ReturnsPage
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onBack={() => navigate('/orders')}
+            />
+          }
+        />
+
+
+        {/* Order Lookup Route */}
+        <Route
+          path="/order-lookup"
+          element={
+            <OrderLookupPage
+              onBack={() => navigate('/')}
+              onOrderFound={(orderData) => {
+                // Order lookup now navigates directly to order confirmation
+                // This callback is kept for compatibility but won't be used
+                console.log('[Order Lookup] Order found:', orderData)
+              }}
+              onContactSupport={() => {
+                handleNavigate.toContact()
+              }}
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              productsLoading={productsLoading}
+              productsError={productsError ? new Error(productsError) : null}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
+              onSignIn={handleNavigate.toLogin}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
             />
           }
         />
@@ -1763,7 +2089,7 @@ function App() {
       />
 
       {isCartOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
+        <div className="fixed inset-0 z-[60] flex justify-end bg-black/60">
           <div className="flex h-full w-full max-w-lg flex-col bg-black backdrop-blur-lg text-white shadow-brand">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 bg-black backdrop-blur-lg">
               <div>
@@ -2069,7 +2395,7 @@ function App() {
       ) : null}
 
       {wishlistFeatureEnabled && isWishlistOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60">
+        <div className="fixed inset-0 z-[60] flex justify-end bg-black/60">
           <div className="flex h-full w-full max-w-md flex-col bg-black backdrop-blur-lg text-white shadow-brand">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 bg-black backdrop-blur-lg">
               <div>
@@ -2461,19 +2787,6 @@ function App() {
         />
       ) : null}
 
-      {isOrderLookupOpen ? (
-        <OrderLookupPage
-          onBack={() => setOrderLookupOpen(false)}
-          onOrderFound={(orderData) => {
-            setOrderLookupOpen(false)
-            setOrderStatusView(orderData)
-          }}
-          onContactSupport={() => {
-            setOrderLookupOpen(false)
-            handleNavigate.toContact()
-          }}
-        />
-      ) : null}
 
       {orderStatusView ? (
         <OrderStatusPage
@@ -2521,6 +2834,29 @@ function App() {
           onForgotPassword={() => setAuthPage('forgot-password')}
           onBack={() => setAuthPage(null)}
           isLoading={isLoading}
+          user={user}
+          cartCount={cartCount}
+          wishlistCount={wishlistCount}
+          wishlistFeatureEnabled={wishlistFeatureEnabled}
+          products={products}
+          productsLoading={productsLoading}
+          productsError={productsError ? new Error(productsError) : null}
+          orderTrackingEnabled={featureFlags.enableOrderTracking}
+          onCart={() => setCartOpen(true)}
+          onWishlist={() => setWishlistOpen(true)}
+          onSearch={() => setSearchOpen(true)}
+          onProductSelect={(product) => {
+            setPdpProduct(product)
+            navigate(`/product/${product.id}`)
+          }}
+          onTrackOrder={handleNavigate.toTrackOrder}
+          onContactUs={handleNavigate.toContact}
+          onAboutUs={handleNavigate.toAbout}
+          onShippingReturns={handleNavigate.toShippingReturns}
+          onPrivacyPolicy={handleNavigate.toPrivacy}
+          onTermsOfService={handleNavigate.toTerms}
+          onSignOut={() => signOut()}
+          onAccount={handleNavigate.toDashboard}
         />
       ) : null}
 
@@ -2533,6 +2869,29 @@ function App() {
           onSignIn={() => setAuthPage('login')}
           onBack={() => setAuthPage(null)}
           isLoading={isLoading}
+          user={user}
+          cartCount={cartCount}
+          wishlistCount={wishlistCount}
+          wishlistFeatureEnabled={wishlistFeatureEnabled}
+          products={products}
+          productsLoading={productsLoading}
+          productsError={productsError ? new Error(productsError) : null}
+          orderTrackingEnabled={featureFlags.enableOrderTracking}
+          onCart={() => setCartOpen(true)}
+          onWishlist={() => setWishlistOpen(true)}
+          onSearch={() => setSearchOpen(true)}
+          onProductSelect={(product) => {
+            setPdpProduct(product)
+            navigate(`/product/${product.id}`)
+          }}
+          onTrackOrder={handleNavigate.toTrackOrder}
+          onContactUs={handleNavigate.toContact}
+          onAboutUs={handleNavigate.toAbout}
+          onShippingReturns={handleNavigate.toShippingReturns}
+          onPrivacyPolicy={handleNavigate.toPrivacy}
+          onTermsOfService={handleNavigate.toTerms}
+          onSignOut={() => signOut()}
+          onAccount={handleNavigate.toDashboard}
         />
       ) : null}
 
@@ -2540,6 +2899,30 @@ function App() {
         <ForgotPasswordPage
           onBack={() => setAuthPage('login')}
           onSignIn={() => setAuthPage('login')}
+          user={user}
+          isLoading={isLoading}
+          cartCount={cartCount}
+          wishlistCount={wishlistCount}
+          wishlistFeatureEnabled={wishlistFeatureEnabled}
+          products={products}
+          productsLoading={productsLoading}
+          productsError={productsError ? new Error(productsError) : null}
+          orderTrackingEnabled={featureFlags.enableOrderTracking}
+          onCart={() => setCartOpen(true)}
+          onWishlist={() => setWishlistOpen(true)}
+          onSearch={() => setSearchOpen(true)}
+          onProductSelect={(product) => {
+            setPdpProduct(product)
+            navigate(`/product/${product.id}`)
+          }}
+          onTrackOrder={handleNavigate.toTrackOrder}
+          onContactUs={handleNavigate.toContact}
+          onAboutUs={handleNavigate.toAbout}
+          onShippingReturns={handleNavigate.toShippingReturns}
+          onPrivacyPolicy={handleNavigate.toPrivacy}
+          onTermsOfService={handleNavigate.toTerms}
+          onSignOut={() => signOut()}
+          onAccount={handleNavigate.toDashboard}
         />
       ) : null}
     </>

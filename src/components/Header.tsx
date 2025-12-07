@@ -39,12 +39,17 @@ export function Header({
   const [searchQuery, setSearchQuery] = useState('')
   const [isDropdownOpen, setDropdownOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setDropdownOpen(false)
+      }
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false)
       }
     }
 
@@ -226,22 +231,56 @@ export function Header({
               {/* Auth - Hidden on mobile (in menu), visible on tablet+ */}
             {user ? (
               <>
-                  <button
-                    className="hidden sm:flex rounded-full border border-white/20 bg-white/10 px-2.5 py-2 text-xs text-white hover:border-primary/50 hover:bg-white/15 min-h-[40px] md:px-3 md:text-sm md:min-h-[44px] transition-all"
-                    onClick={onAccount}
-                  >
-                    <svg className="h-4 w-4 md:h-5 md:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <span className="hidden lg:inline ml-1.5 md:ml-2">Account</span>
-                  </button>
-                  <button
-                    className="hidden sm:flex rounded-full border border-white/20 bg-white/10 px-2.5 py-2 text-xs text-white hover:border-primary/50 hover:bg-white/15 min-h-[40px] md:px-3 md:text-sm md:min-h-[44px] transition-all"
-                    onClick={onSignOut}
-                  >
-                    <span className="hidden md:inline">Sign out</span>
-                    <span className="md:hidden">Out</span>
-                  </button>
+                  <div ref={accountMenuRef} className="hidden sm:block relative">
+                    <button
+                      className="flex rounded-full border border-white/20 bg-white/10 px-2.5 py-2 text-xs text-white hover:border-primary/50 hover:bg-white/15 min-h-[40px] md:px-3 md:text-sm md:min-h-[44px] transition-all"
+                      onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
+                    >
+                      <svg className="h-4 w-4 md:h-5 md:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      <span className="hidden lg:inline ml-1.5 md:ml-2">Account</span>
+                      <svg className={`ml-1.5 h-3 w-3 md:h-4 md:w-4 transition-transform ${isAccountMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {/* Account Dropdown Menu */}
+                    {isAccountMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-48 rounded-lg border border-white/10 bg-surface shadow-lg z-50">
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              navigate('/profile')
+                              setIsAccountMenuOpen(false)
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-white/10 transition-colors"
+                          >
+                            Profile
+                          </button>
+                          <button
+                            onClick={() => {
+                              navigate('/orders')
+                              setIsAccountMenuOpen(false)
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-white/10 transition-colors"
+                          >
+                            Orders
+                          </button>
+                          <div className="my-1 border-t border-white/10" />
+                          <button
+                            onClick={() => {
+                              onSignOut()
+                              setIsAccountMenuOpen(false)
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-white/10 transition-colors"
+                          >
+                            Sign Out
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <button
@@ -401,15 +440,26 @@ export function Header({
               <div className="pt-4 border-t border-white/10 space-y-2 mt-4 bg-black/80 rounded-t-lg -mx-4 px-4 pb-4">
                 {user ? (
                   <>
-                    <button
-                      onClick={() => {
-                        onAccount()
-                        setIsMobileMenuOpen(false)
-                      }}
-                      className="w-full px-4 py-3 rounded-lg text-base font-medium text-slate-200 hover:bg-white/5 min-h-[44px] text-left"
-                    >
-                      Account
-                    </button>
+                    <div className="space-y-1">
+                      <button
+                        onClick={() => {
+                          navigate('/profile')
+                          setIsMobileMenuOpen(false)
+                        }}
+                        className="w-full px-4 py-3 rounded-lg text-base font-medium text-slate-200 hover:bg-white/5 min-h-[44px] text-left"
+                      >
+                        Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          navigate('/orders')
+                          setIsMobileMenuOpen(false)
+                        }}
+                        className="w-full px-4 py-3 rounded-lg text-base font-medium text-slate-200 hover:bg-white/5 min-h-[44px] text-left"
+                      >
+                        Orders
+                      </button>
+                    </div>
                     <button
                       onClick={() => {
                         onSignOut()

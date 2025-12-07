@@ -508,14 +508,14 @@ export function OrderConfirmationPage({
                     <p className={`text-sm font-medium mb-1 ${
                       orderData.pickup_status.status === 'ready' ? 'text-green-400' : 'text-primary'
                     }`}>
-                      {orderData.pickup_status.status === 'ready' ? '✅ ' : '⏳ '}
+                      {orderData.pickup_status.status === 'ready' ? '' : ''}
                       {orderData.pickup_status.message}
                     </p>
                   </div>
                 )}
                 
                 <div className="mt-4 rounded-lg border border-primary/30 bg-primary/10 p-4">
-                  <p className="text-sm font-medium text-primary mb-2">📦 What to Bring</p>
+                  <p className="text-sm font-medium text-primary mb-2">What to Bring</p>
                   <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside">
                     <li>Your Order ID: <span className="font-medium text-white">{orderNumber}</span></li>
                     <li>Valid Photo ID for verification</li>

@@ -87,42 +87,39 @@ export default async function handler(req, res) {
         });
       }
 
-      // Use transaction to ensure atomicity
-      await sql.begin(async (sql) => {
-        // Delete existing cart items
-        await sql`
-          DELETE FROM cart
-          WHERE user_id = ${customerId}::text
+      // Delete existing cart items first
+      await sql`
+        DELETE FROM cart
+        WHERE user_id = ${customerId}::text
+      `;
+
+      // Insert new cart items
+      if (items.length > 0) {
+        // Verify products exist and get their details
+        const productIds = items.map(item => item.sku);
+        const products = await sql`
+          SELECT id, name, price, image_url, category, stock_count
+          FROM products
+          WHERE id = ANY(${productIds})
         `;
 
-        // Insert new cart items
-        if (items.length > 0) {
-          // Verify products exist and get their details
-          const productIds = items.map(item => item.sku);
-          const products = await sql`
-            SELECT id, name, price, image_url, category, stock_count
-            FROM products
-            WHERE id = ANY(${productIds})
-          `;
+        const productMap = new Map(products.map(p => [p.id, p]));
 
-          const productMap = new Map(products.map(p => [p.id, p]));
-
-          // Insert valid products only
-          for (const item of items) {
-            const product = productMap.get(item.sku);
-            if (product && item.quantity > 0) {
-              await sql`
-                INSERT INTO cart (user_id, product_id, quantity, updated_at)
-                VALUES (${customerId}::text, ${item.sku}, ${item.quantity}, CURRENT_TIMESTAMP)
-                ON CONFLICT (user_id, product_id)
-                DO UPDATE SET 
-                  quantity = ${item.quantity},
-                  updated_at = CURRENT_TIMESTAMP
-              `;
-            }
+        // Insert valid products only
+        for (const item of items) {
+          const product = productMap.get(item.sku);
+          if (product && item.quantity > 0) {
+            await sql`
+              INSERT INTO cart (user_id, product_id, quantity, updated_at)
+              VALUES (${customerId}::text, ${item.sku}, ${item.quantity}, CURRENT_TIMESTAMP)
+              ON CONFLICT (user_id, product_id)
+              DO UPDATE SET 
+                quantity = ${item.quantity},
+                updated_at = CURRENT_TIMESTAMP
+            `;
           }
         }
-      });
+      }
 
       return res.status(200).json({
         success: true,
@@ -136,10 +133,17 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('[Cart API] Error:', error);
+    console.error('[Cart API] Error stack:', error.stack);
+    console.error('[Cart API] Request method:', req.method);
+    console.error('[Cart API] Request body:', JSON.stringify(req.body, null, 2));
+    console.error('[Cart API] Customer ID:', customerId);
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to process cart request',
-      ...(process.env.NODE_ENV === 'development' && { details: error.message }),
+      ...(process.env.NODE_ENV === 'development' && { 
+        details: error.message,
+        stack: error.stack 
+      }),
     });
   }
 }

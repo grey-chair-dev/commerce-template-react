@@ -138,56 +138,11 @@ function getFirebaseConfig(): AuthProvider {
 
 /**
  * Get OAuth provider availability
- * These are typically configured on the auth service side, not via env vars
+ * OAuth providers are disabled - only email/password authentication is used
  */
 function getOAuthProviders(): AuthProvider[] {
-  const env = import.meta.env as Record<string, string | undefined>
-  
-  // Check if OAuth providers are enabled (can be set to 'true' to enable)
-  const googleEnabled = env.VITE_OAUTH_GOOGLE_ENABLED !== 'false'
-  const githubEnabled = env.VITE_OAUTH_GITHUB_ENABLED !== 'false'
-  const appleEnabled = env.VITE_OAUTH_APPLE_ENABLED !== 'false'
-  const microsoftEnabled = env.VITE_OAUTH_MICROSOFT_ENABLED !== 'false'
-
-  const providers: AuthProvider[] = []
-
-  if (googleEnabled) {
-    providers.push({
-      id: 'google',
-      name: 'Google',
-      enabled: true,
-      credentials: {},
-    })
-  }
-
-  if (githubEnabled) {
-    providers.push({
-      id: 'github',
-      name: 'GitHub',
-      enabled: true,
-      credentials: {},
-    })
-  }
-
-  if (appleEnabled) {
-    providers.push({
-      id: 'apple',
-      name: 'Apple',
-      enabled: true,
-      credentials: {},
-    })
-  }
-
-  if (microsoftEnabled) {
-    providers.push({
-      id: 'microsoft',
-      name: 'Microsoft',
-      enabled: true,
-      credentials: {},
-    })
-  }
-
-  return providers
+  // OAuth is disabled - only email/password authentication is available
+  return []
 }
 
 /**
@@ -233,9 +188,7 @@ export function getAuthConfig(): AuthConfig {
     authProviders.push(firebase)
   }
 
-  // Add OAuth providers (these work with the main auth service)
-  const oauthProviders = getOAuthProviders()
-  authProviders.push(...oauthProviders)
+  // OAuth providers are disabled - only email/password authentication is used
 
   return {
     providers: authProviders,
@@ -253,8 +206,9 @@ export function getPrimaryAuthProvider(): AuthProvider | null {
 
 /**
  * Get OAuth providers only
+ * Returns empty array - OAuth is disabled
  */
 export function getOAuthProvidersOnly(): AuthProvider[] {
-  return getOAuthProviders()
+  return []
 }
 

@@ -16,22 +16,43 @@ const errorEndpoint =
   import.meta.env.VITE_ERROR_WEBHOOK_URL ?? import.meta.env.ERROR_WEBHOOK_URL
 const metricEndpoint =
   import.meta.env.VITE_METRICS_WEBHOOK_URL ?? import.meta.env.METRICS_WEBHOOK_URL
+const COOKIE_CONSENT_KEY = 'lct_cookie_consent'
+
+/**
+ * Check if user has consented to analytics/telemetry
+ */
+function hasConsent(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  return localStorage.getItem(COOKIE_CONSENT_KEY) === 'true'
+}
 
 /**
  * Registers global listeners for runtime errors and unhandled rejections.
  * Returns a cleanup function to remove the listeners.
+ * Only tracks if user has consented to analytics.
  */
 export function initClientMonitors(): () => void {
   if (typeof window === 'undefined') {
     return () => undefined
   }
 
+  // Only initialize if user has consented
+  if (!hasConsent()) {
+    return () => undefined
+  }
+
   const handleError = (event: ErrorEvent) => {
-    reportClientError(event.error ?? event.message ?? 'Unknown error', 'window.error')
+    if (hasConsent()) {
+      reportClientError(event.error ?? event.message ?? 'Unknown error', 'window.error')
+    }
   }
 
   const handleRejection = (event: PromiseRejectionEvent) => {
-    reportClientError(event.reason ?? 'Unhandled rejection', 'unhandledrejection')
+    if (hasConsent()) {
+      reportClientError(event.reason ?? 'Unhandled rejection', 'unhandledrejection')
+    }
   }
 
   window.addEventListener('error', handleError)
@@ -47,7 +68,8 @@ export function initClientMonitors(): () => void {
 }
 
 export function reportClientError(error: unknown, context = 'client'): void {
-  if (!errorEndpoint || typeof navigator === 'undefined') {
+  // Only send if user has consented to analytics
+  if (!hasConsent() || !errorEndpoint || typeof navigator === 'undefined') {
     return
   }
 
@@ -71,7 +93,8 @@ export function trackMetric(
   value: number,
   tags?: Record<string, string>,
 ): void {
-  if (!metricEndpoint || typeof navigator === 'undefined') {
+  // Only send if user has consented to analytics
+  if (!hasConsent() || !metricEndpoint || typeof navigator === 'undefined') {
     return
   }
 

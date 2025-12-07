@@ -39,10 +39,16 @@ export default async function handler(req, res) {
     process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : null,
   ].filter(Boolean);
 
-  // Allow requests from any origin in development, or specific origins in production
-  if (origin && (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development')) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (process.env.NODE_ENV === 'development') {
+  // Always set CORS headers - allow localhost origins in development
+  if (origin) {
+    // Check if origin is localhost or matches allowed origins
+    if (origin.includes('localhost') || allowedOrigins.some(allowed => origin.includes(allowed.split('://')[1]))) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    } else if (allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+  } else if (process.env.NODE_ENV === 'development' || !process.env.VERCEL) {
+    // In development, allow all origins if no origin header
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
 

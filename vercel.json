@@ -44,7 +44,27 @@
       "memory": 512,
       "maxDuration": 30
     },
+    "api/auth/forgot-password.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/auth/reset-password.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
     "api/order/details.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/order/lookup.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/admin/orders.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/admin/orders/[orderId]/status.js": {
       "memory": 512,
       "maxDuration": 30
     },
@@ -53,6 +73,26 @@
       "maxDuration": 30
     },
     "api/user/sync-cart.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/profile.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/password.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/orders.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/order-detail.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/delete-account.js": {
       "memory": 512,
       "maxDuration": 30
     },
@@ -95,6 +135,10 @@
       "destination": "/api/webhooks/square-order-paid.js"
     },
     {
+      "source": "/api/webhooks/test-square-order",
+      "destination": "/api/webhooks/test-square-order.js"
+    },
+    {
       "source": "/api/catalog/products",
       "destination": "/api/catalog/products.js"
     },
@@ -131,8 +175,28 @@
       "destination": "/api/auth/logout.js"
     },
     {
+      "source": "/api/auth/forgot-password",
+      "destination": "/api/auth/forgot-password.js"
+    },
+    {
+      "source": "/api/auth/reset-password",
+      "destination": "/api/auth/reset-password.js"
+    },
+    {
       "source": "/api/order/details",
       "destination": "/api/order/details.js"
+    },
+    {
+      "source": "/api/order/lookup",
+      "destination": "/api/order/lookup.js"
+    },
+    {
+      "source": "/api/admin/orders",
+      "destination": "/api/admin/orders.js"
+    },
+    {
+      "source": "/api/admin/orders/:orderId/status",
+      "destination": "/api/admin/orders/[orderId]/status.js"
     },
     {
       "source": "/api/user/cart",
@@ -141,6 +205,38 @@
     {
       "source": "/api/user/sync-cart",
       "destination": "/api/user/sync-cart.js"
+    },
+    {
+      "source": "/api/user/profile",
+      "destination": "/api/user/profile.js"
+    },
+    {
+      "source": "/api/user/password",
+      "destination": "/api/user/password.js"
+    },
+    {
+      "source": "/api/user/orders",
+      "destination": "/api/user/orders.js"
+    },
+    {
+      "source": "/api/user/order-detail",
+      "destination": "/api/user/order-detail.js"
+    },
+    {
+      "source": "/api/user/delete-account",
+      "destination": "/api/user/delete-account.js"
+    },
+    {
+      "source": "/api/user/profile",
+      "destination": "/api/user/profile.js"
+    },
+    {
+      "source": "/api/user/password",
+      "destination": "/api/user/password.js"
+    },
+    {
+      "source": "/api/user/orders",
+      "destination": "/api/user/orders.js"
     },
         {
           "source": "/api/webhooks/slack-alert",

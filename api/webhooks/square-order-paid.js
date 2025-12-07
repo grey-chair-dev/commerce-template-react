@@ -123,19 +123,76 @@ async function processOrderUpdate(sql, event) {
       version = orderObject.version || 0;
     }
     
+    // Log the full order object structure for debugging
+    console.log(`[Webhook] ========== ORDER UPDATE WEBHOOK ==========`);
+    console.log(`[Webhook] Square Order ID: ${squareOrderId}`);
+    console.log(`[Webhook] Order state: ${orderState}, Version: ${version}`);
+    console.log(`[Webhook] Order object keys:`, Object.keys(orderObject || {}));
+    console.log(`[Webhook] Full order object (first 3000 chars):`, JSON.stringify(orderObject, null, 2).substring(0, 3000));
+    
     // Check if order already exists
     const existingOrder = await sql`
       SELECT id, status FROM orders WHERE square_order_id = ${squareOrderId}
     `;
     
-    // Map Square order state to our order status
-    const statusMap = {
-      'DRAFT': 'pending',
-      'OPEN': 'confirmed',
-      'COMPLETED': 'confirmed',
-      'CANCELED': 'cancelled',
-    };
-    const orderStatus = statusMap[orderState] || 'pending';
+    console.log(`[Webhook] Existing order in DB:`, existingOrder);
+    
+    // Extract fulfillment state from order fulfillments
+    // This is what gets updated when order status changes in Square
+    let fulfillmentState = null;
+    const fulfillments = orderObject?.fulfillments || [];
+    console.log(`[Webhook] Found ${fulfillments.length} fulfillments in order`);
+    
+    if (fulfillments.length > 0) {
+      // Get the first fulfillment (usually pickup fulfillment)
+      const firstFulfillment = fulfillments[0];
+      fulfillmentState = firstFulfillment.state || firstFulfillment.fulfillment_state || null;
+      
+      // Also check for state in different possible locations
+      if (!fulfillmentState) {
+        fulfillmentState = firstFulfillment.fulfillmentState || firstFulfillment.State || null;
+      }
+      
+      // Normalize to uppercase for comparison
+      if (fulfillmentState) {
+        fulfillmentState = fulfillmentState.toUpperCase();
+      }
+      
+      console.log(`[Webhook] Fulfillment state extracted: ${fulfillmentState}`);
+      console.log(`[Webhook] Full fulfillment object:`, JSON.stringify(firstFulfillment, null, 2));
+    } else {
+      console.log(`[Webhook] No fulfillments found in order object`);
+    }
+    
+    // Map Square fulfillment state to our order status (priority over order state)
+    // Square fulfillment states: PROPOSED, RESERVED, PREPARED, COMPLETED, CANCELED
+    let orderStatus = 'pending'; // Default
+    
+    if (fulfillmentState) {
+      // Fulfillment state takes priority (more specific)
+      const fulfillmentStatusMap = {
+        'PROPOSED': 'processing',
+        'RESERVED': 'processing',
+        'PREPARED': 'ready for pickup',
+        'COMPLETED': 'picked up',
+        'CANCELED': 'cancelled',
+        'CANCELLED': 'cancelled', // Handle both spellings
+      };
+      orderStatus = fulfillmentStatusMap[fulfillmentState] || orderStatus;
+      console.log(`[Webhook] Mapped fulfillment state "${fulfillmentState}" to database status: "${orderStatus}"`);
+    } else {
+      // Fallback to order state if no fulfillment state
+      const statusMap = {
+        'DRAFT': 'pending',
+        'OPEN': 'confirmed',
+        'COMPLETED': 'confirmed',
+        'CANCELED': 'cancelled',
+        'CANCELLED': 'cancelled',
+      };
+      orderStatus = statusMap[orderState] || 'pending';
+      console.log(`[Webhook] No fulfillment state found, mapped order state "${orderState}" to database status: "${orderStatus}"`);
+      console.log(`[Webhook] WARNING: Order state fallback used - fulfillment state may not be in webhook payload`);
+    }
     
     // ============================================
     // DATA EXTRACTION: Extract all required data from webhook payload
@@ -185,7 +242,7 @@ async function processOrderUpdate(sql, event) {
     let customerPhone = null;
     
     // Extract email and customer details from fulfillments (pickup) or shipping address
-    const fulfillments = orderObject?.fulfillments || [];
+    // Note: fulfillments already extracted above, reuse it
     const pickupFulfillment = fulfillments.find(f => f.type === 'PICKUP' || f.fulfillment_type === 'PICKUP');
     
     if (pickupFulfillment) {
@@ -353,6 +410,42 @@ async function processOrderUpdate(sql, event) {
     if (existingOrder.length > 0) {
       // Update existing order with extracted data using transaction
       const orderId = existingOrder[0].id;
+      const currentStatus = existingOrder[0].status;
+      
+      // If status is different, update it (even if fulfillment state is not present)
+      // This ensures we update the database when order state changes
+      if (orderStatus !== currentStatus) {
+        console.log(`[Webhook] Status change detected: "${currentStatus}" → "${orderStatus}"`);
+        console.log(`[Webhook] Fulfillment state: ${fulfillmentState || 'not found'}, Order state: ${orderState}`);
+        try {
+          const updateResult = await sql`
+            UPDATE orders 
+            SET 
+              status = ${orderStatus},
+              updated_at = NOW()
+            WHERE id = ${orderId}
+            RETURNING id, status
+          `;
+          console.log(`✅ Updated order ${orderId} status from "${currentStatus}" to "${orderStatus}"`);
+          console.log(`[Webhook] Update result:`, updateResult);
+          
+          if (updateResult && updateResult.length > 0) {
+            return {
+              orderId: orderId,
+              action: 'status_updated',
+              status: orderStatus,
+              fulfillmentState: fulfillmentState || null,
+              orderState: orderState,
+            };
+          }
+        } catch (error) {
+          console.error(`[Webhook] Error updating order status:`, error);
+          console.error(`[Webhook] Error stack:`, error.stack);
+          // Continue to full update below
+        }
+      } else {
+        console.log(`[Webhook] Status unchanged: "${currentStatus}" (fulfillment state: ${fulfillmentState || 'not found'})`);
+      }
       
       try {
         // Use transaction to update order and order_items atomically
@@ -809,6 +902,7 @@ export default async function handler(req, res) {
     }
     
     console.log(`📦 Received Square webhook: ${payload.type}`);
+    console.log(`[Webhook] Full payload structure:`, JSON.stringify(payload, null, 2).substring(0, 2000));
     
     // Initialize Neon database client
     const sql = neon(databaseUrl);

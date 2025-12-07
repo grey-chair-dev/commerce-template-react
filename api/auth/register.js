@@ -133,6 +133,7 @@ export default async function handler(req, res) {
       password, 
       firstName, 
       lastName,
+      phone,
       first_name,
       last_name
     } = req.body;
@@ -140,6 +141,7 @@ export default async function handler(req, res) {
     // Use camelCase or snake_case, preferring camelCase
     const finalFirstName = firstName || first_name || null;
     const finalLastName = lastName || last_name || null;
+    const finalPhone = phone ? phone.trim() : null;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -192,6 +194,7 @@ export default async function handler(req, res) {
         email,
         first_name,
         last_name,
+        phone,
         password_hash,
         created_at,
         updated_at
@@ -200,6 +203,7 @@ export default async function handler(req, res) {
         ${normalizedEmail},
         ${finalFirstName},
         ${finalLastName},
+        ${finalPhone},
         ${passwordHash},
         NOW(),
         NOW()

@@ -211,22 +211,11 @@ export const StackAuthProvider = ({ children }: { children: ReactNode }) => {
   }, [authClient, checkEmailPasswordAuth])
 
   const handleSignIn = useCallback(
-    async (provider = 'google') => {
-      if (!authClient) {
-        if (import.meta.env.DEV) {
-        console.warn('[StackAuthProvider] signInWithOAuth skipped; no auth client')
-        }
-        return
-      }
-
-      await authClient.signInWithOAuth({
-        provider: provider as any,
-        options: {
-          redirectTo: window.location.origin,
-        },
-      })
+    async (provider?: string) => {
+      // OAuth is disabled - this function is kept for API compatibility but does nothing
+      console.warn('[StackAuthProvider] OAuth sign-in is disabled. Use email/password authentication instead.')
     },
-    [authClient],
+    [],
   )
 
   const handleSignOut = useCallback(async () => {

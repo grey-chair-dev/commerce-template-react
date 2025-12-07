@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { CartItem } from './CheckoutReviewPage'
 import { Header } from './Header'
 import { Footer } from './Footer'
@@ -37,9 +38,6 @@ type OrderLookupPageProps = {
   onTermsOfService?: () => void
 }
 
-// Mock order storage - in production, this would be fetched from an API
-const mockOrders: Record<string, any> = {}
-
 export function OrderLookupPage({
   onBack,
   onOrderFound,
@@ -65,6 +63,7 @@ export function OrderLookupPage({
   onPrivacyPolicy,
   onTermsOfService,
 }: OrderLookupPageProps) {
+  const navigate = useNavigate()
   const [orderNumber, setOrderNumber] = useState('')
   const [email, setEmail] = useState('')
   const [isSearching, setIsSearching] = useState(false)
@@ -81,20 +80,39 @@ export function OrderLookupPage({
 
     setIsSearching(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const response = await fetch('/api/order/lookup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          orderNumber: orderNumber.trim(),
+          email: email.trim(),
+        }),
+      })
 
-    // Check mock orders or simulate finding an order
-    // In production, this would query your backend/API
-    const foundOrder = mockOrders[orderNumber.toLowerCase()]
+      const data = await response.json()
 
-    if (foundOrder && foundOrder.shippingForm.email.toLowerCase() === email.toLowerCase()) {
-      onOrderFound(foundOrder)
-    } else {
-      setError('Order not found. Please check your order number and email address.')
+      if (!response.ok) {
+        setError(data.message || 'Order not found. Please check your order number and email address.')
+        setIsSearching(false)
+        return
+      }
+
+      if (data.success && data.order) {
+        // Navigate to order confirmation page with order ID
+        navigate(`/order-confirmation?id=${data.order.id}`)
+      } else {
+        setError('Order not found. Please check your order number and email address.')
+      }
+    } catch (err) {
+      console.error('[Order Lookup] Error:', err)
+      setError('An error occurred while looking up your order. Please try again later.')
+    } finally {
+      setIsSearching(false)
     }
-
-    setIsSearching(false)
   }
 
   return (

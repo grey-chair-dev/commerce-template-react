@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Header } from './Header'
 import { Footer } from './Footer'
 import type { Product } from '../dataAdapter'
@@ -50,15 +51,85 @@ export function ForgotPasswordPage({
   onPrivacyPolicy,
   onTermsOfService,
 }: ForgotPasswordPageProps) {
-  const [email, setEmail] = useState('')
+  const location = useLocation()
+  // Get email from navigation state (not URL)
+  const emailFromState = location.state?.email || ''
+  const [email, setEmail] = useState(emailFromState)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Update email if state changes (when navigating from login)
+  useEffect(() => {
+    const stateEmail = location.state?.email || ''
+    if (stateEmail && stateEmail !== email) {
+      setEmail(stateEmail)
+    }
+  }, [location.state, email])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In production, this would call a password reset API
-    setIsSubmitted(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    setError(null)
+    setIsSubmitted(false) // Don't show success until we confirm email exists
+
+    if (!email.trim()) {
+      setError('Please enter your email address.')
+      return
+    }
+
+    try {
+      console.log('[Forgot Password] Submitting request for:', email.trim())
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: email.trim(),
+        }),
+      })
+
+      console.log('[Forgot Password] Response status:', response.status)
+
+      let data
+      try {
+        const text = await response.text()
+        console.log('[Forgot Password] Response text:', text)
+        if (text) {
+          data = JSON.parse(text)
+        }
+      } catch (parseError) {
+        console.error('[Forgot Password] Failed to parse response:', parseError)
+        setError('Invalid response from server. Please try again.')
+        setIsSubmitting(false)
+        return
+      }
+
+      if (!response.ok) {
+        console.error('[Forgot Password] Request failed:', data)
+        // Show error message if email not found
+        if (data.error === 'Email not found' || response.status === 404) {
+          setError(data.message || 'No account found with this email address. Please check your email or sign up for a new account.')
+          setIsSubmitting(false)
+          return
+        }
+        // For other errors, show error message
+        setError(data.message || 'Failed to send reset email. Please try again.')
+        setIsSubmitting(false)
+        return
+      }
+
+      // Success - email sent
+      console.log('[Forgot Password] Reset email sent successfully')
+      setIsSubmitted(true)
+      setError(null)
+    } catch (err) {
+      console.error('[Forgot Password] Network error:', err)
+      setError('Network error. Please check your connection and try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (isSubmitted) {
@@ -107,9 +178,62 @@ export function ForgotPasswordPage({
               <div className="flex gap-3 pt-4">
                 <button
                   className="flex-1 rounded-full border border-white/20 px-4 py-3 text-sm font-semibold text-white/80 hover:border-white/40"
-                  onClick={() => {
+                  onClick={async () => {
+                    // Resend email with the same email address
+                    setError(null)
                     setIsSubmitted(false)
-                    setEmail('')
+                    
+                    if (!email.trim()) {
+                      setError('Email address is missing. Please try again.')
+                      return
+                    }
+
+                    try {
+                      console.log('[Forgot Password] Resending email for:', email.trim())
+                      const response = await fetch('/api/auth/forgot-password', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                          email: email.trim(),
+                        }),
+                      })
+
+                      console.log('[Forgot Password] Resend response status:', response.status)
+
+                      let data
+                      try {
+                        const text = await response.text()
+                        console.log('[Forgot Password] Resend response text:', text)
+                        if (text) {
+                          data = JSON.parse(text)
+                        }
+                      } catch (parseError) {
+                        console.error('[Forgot Password] Failed to parse resend response:', parseError)
+                        setError('Invalid response from server. Please try again.')
+                        return
+                      }
+
+                      if (!response.ok) {
+                        console.error('[Forgot Password] Resend request failed:', data)
+                        if (data.error === 'Email not found' || response.status === 404) {
+                          setError(data.message || 'No account found with this email address.')
+                          return
+                        }
+                        setError(data.message || 'Failed to resend email. Please try again.')
+                        return
+                      }
+
+                      // Success - email resent
+                      console.log('[Forgot Password] Email resent successfully')
+                      setIsSubmitted(true)
+                      setError(null)
+                    } catch (err) {
+                      console.error('[Forgot Password] Resend network error:', err)
+                      setError('Network error. Please check your connection and try again.')
+                    }
                   }}
                 >
                   Resend Email
@@ -155,25 +279,36 @@ export function ForgotPasswordPage({
         onProductSelect={onProductSelect || (() => {})}
       />
       <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6 lg:px-8 pt-40 sm:pt-48 md:pt-56">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Forgot Password?</h1>
-            <p className="mt-2 text-sm text-slate-400">
-              Enter your email address and we'll send you a link to reset your password
-            </p>
-          </div>
+        {/* Close button - top right */}
+        <div className="mb-4 flex justify-end">
           <button
-            className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/80 hover:border-white/40"
+            className="rounded-full border border-white/20 px-4 py-2 text-sm text-white/80 hover:border-white/40 transition-colors"
             onClick={onBack}
           >
             Close
           </button>
         </div>
 
+        {/* Centered content */}
         <div className="flex flex-1 flex-col items-center justify-center">
           <div className="w-full max-w-md space-y-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Header */}
+            <div className="text-center">
+              <h1 className="text-3xl font-semibold">Forgot Password?</h1>
+              <p className="mt-3 text-sm text-slate-400">
+                Enter your email address and we'll send you a link to reset your password
+              </p>
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <div className="rounded-2xl border border-red-500/50 bg-red-500/10 p-4 text-sm text-red-400">
+                {error}
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Email address
@@ -181,30 +316,35 @@ export function ForgotPasswordPage({
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setError(null)
+                  }}
                   placeholder="you@example.com"
-                  className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
+                  className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:border-primary focus:bg-white/10 focus:outline-none transition-colors"
                   required
+                  autoFocus
                 />
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-2 text-xs text-slate-400">
                   Enter the email address associated with your account
                 </p>
               </div>
 
               <button
                 type="submit"
-                className="w-full rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white shadow-brand disabled:opacity-50"
-                disabled={!email}
+                className="w-full rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!email || isSubmitting}
               >
-                Send Reset Link
+                {isSubmitting ? 'Sending...' : 'Send Reset Link'}
               </button>
             </form>
 
+            {/* Sign in link */}
             <div className="text-center text-sm text-slate-400">
               Remember your password?{' '}
               <button
                 onClick={onSignIn}
-                className="font-semibold text-primary hover:text-primary/80"
+                className="font-semibold text-primary hover:text-primary/80 transition-colors"
               >
                 Sign in
               </button>
