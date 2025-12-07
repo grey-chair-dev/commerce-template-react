@@ -345,6 +345,21 @@ commerce-template-react/
 
 [Your License Here]
 
+## 🔒 Security
+
+### React Security Update (CVE-2025-55182)
+
+This project uses **React 19.2.1** (patched version) which fixes CVE-2025-55182, a critical vulnerability in React Server Components.
+
+**Note**: This application uses Vite and does not use React Server Components, so the risk is lower. However, we've upgraded to the patched version as a security best practice.
+
+**Affected versions**: React 19.0, 19.1.0, 19.1.1, 19.2.0  
+**Fixed in**: React 19.2.1, 19.1.2, 19.0.1
+
+For more information, see:
+- [React GHSA](https://github.com/facebook/react/security/advisories)
+- [Vercel Security Advisory](https://vercel.com/security/react-server-components-vulnerability)
+
 ## 🆘 Support
 
 For issues or questions:
