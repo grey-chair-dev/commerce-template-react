@@ -205,27 +205,28 @@ async function syncOrderToDatabase(squareOrder, sql) {
     }
 
     // Map fulfillment state to database status
-    let orderStatus = 'pending';
+    // Our statuses: New, In Progress, Ready, Picked Up, Completed, Canceled, Refunded
+    let orderStatus = 'New';
     if (fulfillmentState) {
       const fulfillmentStatusMap = {
-        'PROPOSED': 'processing',
-        'RESERVED': 'processing',
-        'PREPARED': 'ready for pickup',
-        'COMPLETED': 'picked up',
-        'CANCELED': 'cancelled',
-        'CANCELLED': 'cancelled',
+        'PROPOSED': 'In Progress',
+        'RESERVED': 'In Progress',
+        'PREPARED': 'Ready',
+        'COMPLETED': 'Picked Up',
+        'CANCELED': 'Canceled',
+        'CANCELLED': 'Canceled',
       };
       orderStatus = fulfillmentStatusMap[fulfillmentState] || orderStatus;
     } else {
       // Fallback to order state
       const orderState = squareOrder.state || 'DRAFT';
       const statusMap = {
-        'DRAFT': 'pending',
-        'OPEN': 'confirmed',
-        'COMPLETED': 'confirmed',
-        'CANCELED': 'cancelled',
+        'DRAFT': 'New',
+        'OPEN': 'In Progress',
+        'COMPLETED': 'Completed',
+        'CANCELED': 'Canceled',
       };
-      orderStatus = statusMap[orderState] || 'pending';
+      orderStatus = statusMap[orderState] || 'New';
     }
 
     // Check if order exists
