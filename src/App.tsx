@@ -407,40 +407,31 @@ function App() {
   }, [location.pathname])
 
   // Redirect authenticated users away from login/signup pages
-  // If they were in checkout, return them to checkout
+  // If they were in checkout, return them to checkout with their info pre-filled
   useEffect(() => {
     if (!isLoading && user && (location.pathname === '/login' || location.pathname === '/signup')) {
       // Check if we should return to checkout
       const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
       if (returnToCheckout) {
-        console.log('[App] User authenticated, returning to checkout')
+        console.log('[App] User authenticated, returning to checkout with pre-filled info')
         sessionStorage.removeItem('return_to_checkout')
-        // User logged in, skip account and contact, go to review with their info
-        // Fetch user data and create contact form
-        fetch('/api/auth/me', {
-          method: 'GET',
-          credentials: 'include',
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data?.success && data.customer) {
-              setContactForm({
-                email: data.customer.email,
-                firstName: data.customer.firstName,
-                lastName: data.customer.lastName,
-                phone: data.customer.phone || '',
-              })
-              setCheckoutStep('review')
-            } else {
-              // Fallback: go to account selection
-              setCheckoutStep('account')
-            }
-          })
-          .catch(() => {
-            // Fallback: go to account selection
-            setCheckoutStep('account')
-          })
-        // Close auth page modal by navigating to home
+        
+        // Use user data directly from StackAuthProvider (already loaded, no API call needed)
+        // Pre-fill contact form with user's information
+        const contactFormData = {
+          email: user.email || '',
+          firstName: user.user_metadata?.firstName || '',
+          lastName: user.user_metadata?.lastName || '',
+          phone: user.phone || '',
+        }
+        
+        console.log('[App] Pre-filling checkout form with user data:', contactFormData)
+        setContactForm(contactFormData)
+        
+        // Go directly to review step (skip account and contact pages)
+        setCheckoutStep('review')
+        
+        // Close auth page by navigating to home (checkout will remain open)
         navigate('/')
       } else {
         console.log('[App] User is authenticated, redirecting from', location.pathname, 'to profile')
