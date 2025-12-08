@@ -458,115 +458,113 @@ async function processOrderUpdate(sql, event) {
       }
       
       try {
-        // Use transaction to update order and order_items atomically
-        await sql.begin(async (sql) => {
-          // Update order record
-          if (customerId && pickupDetails) {
-            await sql`
-              UPDATE orders 
-              SET 
-                status = ${orderStatus},
-                subtotal = ${subtotalAmount},
-                tax = ${taxAmount},
-                shipping = ${shippingAmount},
-                total = ${totalAmount},
-                customer_id = ${customerId},
-                square_order_id = ${squareOrderId},
-                pickup_details = ${JSON.stringify(pickupDetails)},
-                updated_at = NOW()
-              WHERE id = ${orderId}
-            `;
-          } else if (customerId) {
-            await sql`
-              UPDATE orders 
-              SET 
-                status = ${orderStatus},
-                subtotal = ${subtotalAmount},
-                tax = ${taxAmount},
-                shipping = ${shippingAmount},
-                total = ${totalAmount},
-                customer_id = ${customerId},
-                square_order_id = ${squareOrderId},
-                updated_at = NOW()
-              WHERE id = ${orderId}
-            `;
-          } else if (pickupDetails) {
-            await sql`
-              UPDATE orders 
-              SET 
-                status = ${orderStatus},
-                subtotal = ${subtotalAmount},
-                tax = ${taxAmount},
-                shipping = ${shippingAmount},
-                total = ${totalAmount},
-                square_order_id = ${squareOrderId},
-                pickup_details = ${JSON.stringify(pickupDetails)},
-                updated_at = NOW()
-              WHERE id = ${orderId}
-            `;
-          } else {
-            await sql`
-              UPDATE orders 
-              SET 
-                status = ${orderStatus},
-                subtotal = ${subtotalAmount},
-                tax = ${taxAmount},
-                shipping = ${shippingAmount},
-                total = ${totalAmount},
-                square_order_id = ${squareOrderId},
-                updated_at = NOW()
-              WHERE id = ${orderId}
-            `;
-          }
-          
-          // Delete existing order items (in case of updates)
+        // Neon serverless doesn't support transactions, so we do updates sequentially
+        // Update order record
+        if (customerId && pickupDetails) {
           await sql`
-            DELETE FROM order_items WHERE order_id = ${orderId}
+            UPDATE orders 
+            SET 
+              status = ${orderStatus},
+              subtotal = ${subtotalAmount},
+              tax = ${taxAmount},
+              shipping = ${shippingAmount},
+              total = ${totalAmount},
+              customer_id = ${customerId},
+              square_order_id = ${squareOrderId},
+              pickup_details = ${JSON.stringify(pickupDetails)},
+              updated_at = NOW()
+            WHERE id = ${orderId}
           `;
-          
-          // Insert new line items within the same transaction
-          if (extractedLineItems.length > 0) {
-            for (const item of extractedLineItems) {
-              // Only process ITEM type (skip modifiers, taxes, etc.)
-              if (item.item_type !== 'ITEM') {
-                continue;
-              }
-              
-              if (!item.catalog_object_id) {
-                console.warn(`[Webhook] Skipping line item without catalog_object_id: ${item.name}`);
-                continue;
-              }
-              
-              // Check if product exists in our database
-              const productResult = await sql`
-                SELECT id FROM products WHERE id = ${item.catalog_object_id}
+        } else if (customerId) {
+          await sql`
+            UPDATE orders 
+            SET 
+              status = ${orderStatus},
+              subtotal = ${subtotalAmount},
+              tax = ${taxAmount},
+              shipping = ${shippingAmount},
+              total = ${totalAmount},
+              customer_id = ${customerId},
+              square_order_id = ${squareOrderId},
+              updated_at = NOW()
+            WHERE id = ${orderId}
+          `;
+        } else if (pickupDetails) {
+          await sql`
+            UPDATE orders 
+            SET 
+              status = ${orderStatus},
+              subtotal = ${subtotalAmount},
+              tax = ${taxAmount},
+              shipping = ${shippingAmount},
+              total = ${totalAmount},
+              square_order_id = ${squareOrderId},
+              pickup_details = ${JSON.stringify(pickupDetails)},
+              updated_at = NOW()
+            WHERE id = ${orderId}
+          `;
+        } else {
+          await sql`
+            UPDATE orders 
+            SET 
+              status = ${orderStatus},
+              subtotal = ${subtotalAmount},
+              tax = ${taxAmount},
+              shipping = ${shippingAmount},
+              total = ${totalAmount},
+              square_order_id = ${squareOrderId},
+              updated_at = NOW()
+            WHERE id = ${orderId}
+          `;
+        }
+        
+        // Delete existing order items (in case of updates)
+        await sql`
+          DELETE FROM order_items WHERE order_id = ${orderId}
+        `;
+        
+        // Insert new line items
+        if (extractedLineItems.length > 0) {
+          for (const item of extractedLineItems) {
+            // Only process ITEM type (skip modifiers, taxes, etc.)
+            if (item.item_type !== 'ITEM') {
+              continue;
+            }
+            
+            if (!item.catalog_object_id) {
+              console.warn(`[Webhook] Skipping line item without catalog_object_id: ${item.name}`);
+              continue;
+            }
+            
+            // Check if product exists in our database
+            const productResult = await sql`
+              SELECT id FROM products WHERE id = ${item.catalog_object_id}
+            `;
+            
+            if (productResult && productResult.length > 0) {
+              await sql`
+                INSERT INTO order_items (
+                  order_id,
+                  product_id,
+                  quantity,
+                  price,
+                  subtotal,
+                  created_at
+                ) VALUES (
+                  ${orderId},
+                  ${item.catalog_object_id},
+                  ${parseInt(item.quantity) || 1},
+                  ${item.base_price},
+                  ${item.total},
+                  NOW()
+                )
               `;
-              
-              if (productResult && productResult.length > 0) {
-                await sql`
-                  INSERT INTO order_items (
-                    order_id,
-                    product_id,
-                    quantity,
-                    price,
-                    subtotal,
-                    created_at
-                  ) VALUES (
-                    ${orderId},
-                    ${item.catalog_object_id},
-                    ${parseInt(item.quantity) || 1},
-                    ${item.base_price},
-                    ${item.total},
-                    NOW()
-                  )
-                `;
-                console.log(`[Webhook] Stored line item: ${item.name} (${item.quantity}x)`);
-              } else {
-                console.warn(`[Webhook] Product ${item.catalog_object_id} not found in database, skipping line item`);
-              }
+              console.log(`[Webhook] Stored line item: ${item.name} (${item.quantity}x)`);
+            } else {
+              console.warn(`[Webhook] Product ${item.catalog_object_id} not found in database, skipping line item`);
             }
           }
-        });
+        }
         
         console.log(`✅ Updated order ${orderId} (Square: ${squareOrderId}) to status: ${orderStatus}`);
         console.log(`   Customer ID: ${customerId || 'N/A'}`);
@@ -599,95 +597,93 @@ async function processOrderUpdate(sql, event) {
       const newOrderId = randomUUID();
       
       try {
-        // Use transaction to insert order and order_items atomically
-        await sql.begin(async (sql) => {
-          // 3.7 Pickup Details: Log required pickup details in JSONB column
-          // Store: customer name, email, fulfillment type
-          // pickupDetails already extracted above with all required fields
-          const pickupDetailsForOrder = pickupDetails || null;
-          
-          // INSERT main record into orders table
-          await sql`
-            INSERT INTO orders (
-              id,
-              order_number,
-              customer_id,
-              status,
-              subtotal,
-              tax,
-              shipping,
-              total,
-              shipping_method,
-              pickup_details,
-              square_order_id,
-              created_at,
-              updated_at
-            ) VALUES (
-              ${newOrderId},
-              ${orderNumber},
-              ${customerId || null},
-              ${orderStatus},
-              ${subtotalAmount},
-              ${taxAmount},
-              ${shippingAmount},
-              ${totalAmount},
-              ${pickupFulfillment ? 'pickup' : 'delivery'},
-              ${JSON.stringify(pickupDetailsForOrder)},
-              ${squareOrderId},
-              NOW(),
-              NOW()
-            )
-          `;
-          
-          console.log(`[Webhook] Created new order ${newOrderId} (Square: ${squareOrderId})`);
-          console.log(`   Order Number: ${orderNumber}`);
-          console.log(`   Customer ID: ${customerId || 'N/A'}`);
-          console.log(`   Total: $${totalAmount}`);
-          console.log(`   Pickup Details: ${JSON.stringify(pickupDetailsForOrder)}`);
-          
-          // INSERT individual items into order_items table, linking via order_id
-          if (extractedLineItems.length > 0) {
-            for (const item of extractedLineItems) {
-              // Only process ITEM type (skip modifiers, taxes, etc.)
-              if (item.item_type !== 'ITEM') {
-                continue;
-              }
-              
-              if (!item.catalog_object_id) {
-                console.warn(`[Webhook] Skipping line item without catalog_object_id: ${item.name}`);
-                continue;
-              }
-              
-              // Check if product exists in our database
-              const productResult = await sql`
-                SELECT id FROM products WHERE id = ${item.catalog_object_id}
+        // Neon serverless doesn't support transactions, so we do inserts sequentially
+        // 3.7 Pickup Details: Log required pickup details in JSONB column
+        // Store: customer name, email, fulfillment type
+        // pickupDetails already extracted above with all required fields
+        const pickupDetailsForOrder = pickupDetails || null;
+        
+        // INSERT main record into orders table
+        await sql`
+          INSERT INTO orders (
+            id,
+            order_number,
+            customer_id,
+            status,
+            subtotal,
+            tax,
+            shipping,
+            total,
+            shipping_method,
+            pickup_details,
+            square_order_id,
+            created_at,
+            updated_at
+          ) VALUES (
+            ${newOrderId},
+            ${orderNumber},
+            ${customerId || null},
+            ${orderStatus},
+            ${subtotalAmount},
+            ${taxAmount},
+            ${shippingAmount},
+            ${totalAmount},
+            ${pickupFulfillment ? 'pickup' : 'delivery'},
+            ${JSON.stringify(pickupDetailsForOrder)},
+            ${squareOrderId},
+            NOW(),
+            NOW()
+          )
+        `;
+        
+        console.log(`[Webhook] Created new order ${newOrderId} (Square: ${squareOrderId})`);
+        console.log(`   Order Number: ${orderNumber}`);
+        console.log(`   Customer ID: ${customerId || 'N/A'}`);
+        console.log(`   Total: $${totalAmount}`);
+        console.log(`   Pickup Details: ${JSON.stringify(pickupDetailsForOrder)}`);
+        
+        // INSERT individual items into order_items table, linking via order_id
+        if (extractedLineItems.length > 0) {
+          for (const item of extractedLineItems) {
+            // Only process ITEM type (skip modifiers, taxes, etc.)
+            if (item.item_type !== 'ITEM') {
+              continue;
+            }
+            
+            if (!item.catalog_object_id) {
+              console.warn(`[Webhook] Skipping line item without catalog_object_id: ${item.name}`);
+              continue;
+            }
+            
+            // Check if product exists in our database
+            const productResult = await sql`
+              SELECT id FROM products WHERE id = ${item.catalog_object_id}
+            `;
+            
+            if (productResult && productResult.length > 0) {
+              await sql`
+                INSERT INTO order_items (
+                  order_id,
+                  product_id,
+                  quantity,
+                  price,
+                  subtotal,
+                  created_at
+                ) VALUES (
+                  ${newOrderId},
+                  ${item.catalog_object_id},
+                  ${parseInt(item.quantity) || 1},
+                  ${item.base_price},
+                  ${item.total},
+                  NOW()
+                )
               `;
-              
-              if (productResult && productResult.length > 0) {
-                await sql`
-                  INSERT INTO order_items (
-                    order_id,
-                    product_id,
-                    quantity,
-                    price,
-                    subtotal,
-                    created_at
-                  ) VALUES (
-                    ${newOrderId},
-                    ${item.catalog_object_id},
-                    ${parseInt(item.quantity) || 1},
-                    ${item.base_price},
-                    ${item.total},
-                    NOW()
-                  )
-                `;
-                console.log(`[Webhook] Stored line item: ${item.name} (${item.quantity}x)`);
-              } else {
-                console.warn(`[Webhook] Product ${item.catalog_object_id} not found in database, skipping line item`);
-              }
+              console.log(`[Webhook] Stored line item: ${item.name} (${item.quantity}x)`);
+            } else {
+              console.warn(`[Webhook] Product ${item.catalog_object_id} not found in database, skipping line item`);
             }
           }
-        });
+        }
         
         console.log(`✅ Created new order ${newOrderId} (Square: ${squareOrderId}) with ${extractedLineItems.length} items`);
         
