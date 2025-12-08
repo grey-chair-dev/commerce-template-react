@@ -506,7 +506,6 @@ export function OrderConfirmationPage({
                     <p className={`text-sm font-medium mb-1 ${
                       orderData.pickup_status.status === 'ready' ? 'text-green-400' : 'text-primary'
                     }`}>
-                      {orderData.pickup_status.status === 'ready' ? '' : ''}
                       {orderData.pickup_status.message}
                     </p>
                   </div>
