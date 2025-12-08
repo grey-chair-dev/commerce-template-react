@@ -2241,90 +2241,61 @@ function App() {
                     })
                     
                     // Check if user is authenticated and has all required info
-                    // If yes, skip shipping page and go directly to review
+                    // Use user data from StackAuthProvider (already loaded) instead of making API call
                     if (user && user.id && !isLoading) {
-                      try {
-                        console.log('[Checkout] Fetching customer info from /api/auth/me')
-                        // Fetch full customer details to check if we have all info
-                        const response = await fetch('/api/auth/me', {
-                          method: 'GET',
-                          credentials: 'include',
-                        })
-                        
-                        console.log('[Checkout] API response status:', response.status)
-                        
-                        if (response.ok) {
-                          const data = await response.json()
-                          console.log('[Checkout] API response data:', data)
-                          
-                          if (data?.success && data.customer) {
-                            const customer = data.customer
-                            // Check if we have minimum required fields for pickup
-                            // Email and firstName are required, lastName and phone can be added on review if missing
-                            const hasRequiredInfo = 
-                              customer.email &&
-                              customer.firstName
-                            
-                            console.log('[Checkout] Customer info check:', {
-                              email: customer.email,
-                              firstName: customer.firstName,
-                              lastName: customer.lastName,
-                              phone: customer.phone,
-                              hasRequiredInfo,
-                            })
-                            
-                            if (hasRequiredInfo) {
-                              // Skip shipping page - go directly to review
-                              // Use available data, empty strings for missing fields (user can add on review if needed)
-                              const shippingFormData = {
-                                email: customer.email,
-                                firstName: customer.firstName,
-                                lastName: customer.lastName || '',
-                                phone: customer.phone || '',
-                                address: '',
-                                city: '',
-                                state: '',
-                                zipCode: '',
-                                deliveryMethod: 'pickup' as const,
-                              }
-                              
-                              console.log('[Checkout] User has complete info, skipping to review with form:', contactFormData)
-                              
-                              // Set form first, then step, then close cart
-                              setContactForm(contactFormData)
-                              // Use setTimeout to ensure state updates in correct order
-                              setTimeout(() => {
-                                setCheckoutStep('review')
-                                setCartOpen(false)
-                              }, 0)
-                              return
-                            } else {
-                              console.log('[Checkout] Missing required info, will show contact page')
-                              // Logged in user with incomplete info - show contact page to complete
-                              const contactFormData = {
-                                email: customer.email || '',
-                                firstName: customer.firstName || '',
-                                lastName: customer.lastName || '',
-                                phone: customer.phone || '',
-                              }
-                              setContactForm(contactFormData)
-                              setCheckoutStep('contact')
-                              setTimeout(() => setCartOpen(false), 0)
-                              return
-                            }
-                          } else {
-                            console.log('[Checkout] API response missing success or customer data')
-                          }
-                        } else {
-                          const errorText = await response.text()
-                          console.log('[Checkout] API response not OK:', response.status, errorText)
+                      // Extract customer info from user object (already fetched by StackAuthProvider)
+                      const customerEmail = user.email || ''
+                      const customerFirstName = user.user_metadata?.firstName || ''
+                      const customerLastName = user.user_metadata?.lastName || ''
+                      const customerPhone = user.phone || ''
+                      
+                      // Check if we have minimum required fields for pickup
+                      // Email and firstName are required, lastName and phone can be added on review if missing
+                      const hasRequiredInfo = customerEmail && customerFirstName
+                      
+                      console.log('[Checkout] Using user data from StackAuthProvider:', {
+                        email: customerEmail,
+                        firstName: customerFirstName,
+                        lastName: customerLastName,
+                        phone: customerPhone,
+                        hasRequiredInfo,
+                      })
+                      
+                      if (hasRequiredInfo) {
+                        // Skip contact page - go directly to review
+                        const contactFormData = {
+                          email: customerEmail,
+                          firstName: customerFirstName,
+                          lastName: customerLastName,
+                          phone: customerPhone,
                         }
-                      } catch (error) {
-                        console.error('[Checkout] Failed to check customer info:', error)
-                        // Fall through to show shipping page
+                        
+                        console.log('[Checkout] User has complete info, skipping to review')
+                        
+                        // Set form first, then step, then close cart
+                        setContactForm(contactFormData)
+                        // Use setTimeout to ensure state updates in correct order
+                        setTimeout(() => {
+                          setCheckoutStep('review')
+                          setCartOpen(false)
+                        }, 0)
+                        return
+                      } else {
+                        console.log('[Checkout] Missing required info, will show contact page')
+                        // Logged in user with incomplete info - show contact page to complete
+                        const contactFormData = {
+                          email: customerEmail,
+                          firstName: customerFirstName,
+                          lastName: customerLastName,
+                          phone: customerPhone,
+                        }
+                        setContactForm(contactFormData)
+                        setCheckoutStep('contact')
+                        setTimeout(() => setCartOpen(false), 0)
+                        return
                       }
                     } else {
-                      console.log('[Checkout] User not authenticated or still loading, will show shipping page')
+                      console.log('[Checkout] User not authenticated or still loading, will show account page')
                     }
                     
                     // Default: show account selection page

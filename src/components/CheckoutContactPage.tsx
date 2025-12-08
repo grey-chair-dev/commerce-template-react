@@ -94,58 +94,25 @@ export function CheckoutContactPage({
     }
   }, [])
 
-  // Fetch full customer details and update form when user is authenticated
+  // Pre-fill form with user data when user is authenticated
+  // Use data from StackAuthProvider (already loaded) instead of making API call
   useEffect(() => {
     if (user && user.id) {
-      // Fetch full customer details from API to get phone and other info
-      fetch('/api/auth/me', {
-        method: 'GET',
-        credentials: 'include',
+      // Use user data directly from StackAuthProvider - no API call needed
+      // This data is already available and up-to-date
+      setForm((prev) => ({
+        ...prev,
+        email: user.email || prev.email || '',
+        firstName: user.user_metadata?.firstName || prev.firstName || '',
+        lastName: user.user_metadata?.lastName || prev.lastName || '',
+        phone: user.phone || prev.phone || '',
+      }))
+      console.log('[CheckoutContactPage] Pre-filled form with user data (no API call):', {
+        email: user.email,
+        firstName: user.user_metadata?.firstName,
+        lastName: user.user_metadata?.lastName,
+        phone: user.phone,
       })
-        .then((response) => {
-          if (response.ok) {
-            return response.json()
-          }
-          return null
-        })
-        .then((data) => {
-          if (data?.success && data.customer) {
-            // Prioritize API data - it has the most up-to-date information including phone
-            setForm((prev) => ({
-              ...prev,
-              email: data.customer.email || prev.email || '',
-              firstName: data.customer.firstName || prev.firstName || '',
-              lastName: data.customer.lastName || prev.lastName || '',
-              phone: data.customer.phone || prev.phone || user?.phone || '',
-            }))
-            console.log('[CheckoutContactPage] Pre-filled form with customer data:', {
-              email: data.customer.email,
-              firstName: data.customer.firstName,
-              lastName: data.customer.lastName,
-              phone: data.customer.phone,
-            })
-          } else {
-            // Fallback to user metadata if API call fails
-            setForm((prev) => ({
-              ...prev,
-              email: user.email || prev.email || '',
-              firstName: user.user_metadata?.firstName || prev.firstName || '',
-              lastName: user.user_metadata?.lastName || prev.lastName || '',
-              phone: user.phone || prev.phone || '',
-            }))
-          }
-        })
-        .catch((error) => {
-          console.error('[CheckoutContactPage] Failed to fetch customer data:', error)
-          // Fallback to user metadata if API call fails
-          setForm((prev) => ({
-            ...prev,
-            email: user.email || prev.email || '',
-            firstName: user.user_metadata?.firstName || prev.firstName || '',
-            lastName: user.user_metadata?.lastName || prev.lastName || '',
-            phone: user.phone || prev.phone || '',
-          }))
-        })
     }
   }, [user])
 
