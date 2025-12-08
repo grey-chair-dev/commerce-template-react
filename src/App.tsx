@@ -253,12 +253,12 @@ function App() {
       return
     }
 
-    // Don't clear localStorage if we haven't tried loading from it yet
-    // This prevents clearing the cart on initial page load before P.2 can load it
-    if (cartItems.length === 0 && !hasAttemptedLoadFromStorageRef.current) {
-      console.log('[Cart] Cart is empty but haven't loaded from storage yet, skipping clear')
-      return
-    }
+      // Don't clear localStorage if we haven't tried loading from it yet
+      // This prevents clearing the cart on initial page load before P.2 can load it
+      if (cartItems.length === 0 && !hasAttemptedLoadFromStorageRef.current) {
+        console.log('[Cart] Cart is empty but haven\'t loaded from storage yet, skipping clear')
+        return
+      }
 
     console.log('[Cart] Guest user - saving to localStorage:', cartItems.length, 'items')
 
