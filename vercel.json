@@ -68,6 +68,10 @@
       "memory": 512,
       "maxDuration": 30
     },
+    "api/admin/sync-square-orders.js": {
+      "memory": 512,
+      "maxDuration": 60
+    },
     "api/user/cart.js": {
       "memory": 512,
       "maxDuration": 30
@@ -137,6 +141,14 @@
     {
       "source": "/api/webhooks/test-square-order",
       "destination": "/api/webhooks/test-square-order.js"
+    },
+    {
+      "source": "/api/webhooks/webhook-test",
+      "destination": "/api/webhooks/webhook-test.js"
+    },
+    {
+      "source": "/api/admin/sync-square-orders",
+      "destination": "/api/admin/sync-square-orders.js"
     },
     {
       "source": "/api/catalog/products",

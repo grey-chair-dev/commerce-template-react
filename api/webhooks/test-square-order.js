@@ -27,9 +27,14 @@ export default async function handler(req, res) {
                         process.env.NEON_DATABASE_URL || 
                         process.env.DATABASE_URL;
 
-    const webhookUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}/api/webhooks/square-order-paid`
-      : 'https://your-domain.vercel.app/api/webhooks/square-order-paid';
+    // Use production domain if available, otherwise fall back to VERCEL_URL
+    const productionDomain = process.env.NEXT_PUBLIC_SITE_URL || 
+                             process.env.VERCEL_URL ||
+                             'spiralgrooverecords.greychair.io';
+    
+    // Remove protocol if present
+    const domain = productionDomain.replace(/^https?:\/\//, '');
+    const webhookUrl = `https://${domain}/api/webhooks/square-order-paid`;
 
     return res.status(200).json({
       status: 'ok',
