@@ -865,11 +865,27 @@ async function processPaymentEvent(sql, event) {
         const currentStatus = orderResult[0].status;
         
         // Update order with payment info
+        // Payment status should only update order status if it's still pending
+        // Don't override more advanced statuses (processing, ready for pickup, etc.)
         let newStatus = currentStatus;
-        if (paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') {
-          newStatus = 'confirmed';
-        } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELED') {
-          newStatus = 'cancelled';
+        
+        // Only update status if order is still in initial states
+        const isInitialState = currentStatus === 'pending' || currentStatus === 'confirmed';
+        
+        if (isInitialState) {
+          // Map payment status to order status only for initial states
+          if (paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') {
+            // Payment approved - order is confirmed
+            newStatus = 'confirmed';
+          } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELED' || paymentStatus === 'VOIDED') {
+            // Payment failed - order is cancelled
+            newStatus = 'cancelled';
+          }
+          // For other payment statuses (PENDING, etc.), keep current status
+        } else {
+          // Order is already in a more advanced state (processing, ready for pickup, etc.)
+          // Don't change it based on payment status - fulfillment state takes precedence
+          console.log(`[Webhook] Order already in advanced state "${currentStatus}" - not updating based on payment status "${paymentStatus}"`);
         }
         
         await sql`
