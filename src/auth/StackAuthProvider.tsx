@@ -219,6 +219,15 @@ export const StackAuthProvider = ({ children }: { children: ReactNode }) => {
   )
 
   const handleSignOut = useCallback(async () => {
+    // Clear cart from localStorage when signing out
+    try {
+      const CART_STORAGE_KEY = 'spiral_groove_cart'
+      localStorage.removeItem(CART_STORAGE_KEY)
+      console.log('[StackAuthProvider] Cleared cart from localStorage on sign out')
+    } catch (error) {
+      console.error('[StackAuthProvider] Failed to clear cart:', error)
+    }
+    
     if (!authClient) {
       // For email/password auth, we need to clear the cookie
       // The cookie is HttpOnly, so we can't delete it from JS

@@ -112,7 +112,25 @@ function App() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const { user, isLoading } = useUser()
-  const { signInWithOAuth, signOut } = useStackAuth()
+  const { signInWithOAuth, signOut: stackSignOut } = useStackAuth()
+  
+  // Wrap signOut to also clear cart
+  const signOut = useCallback(async () => {
+    // Clear cart state
+    setCartItems([])
+    console.log('[App] Cleared cart on sign out')
+    
+    // Clear cart from localStorage
+    try {
+      localStorage.removeItem(CART_STORAGE_KEY)
+      console.log('[App] Cleared cart from localStorage on sign out')
+    } catch (error) {
+      console.error('[App] Failed to clear cart from localStorage:', error)
+    }
+    
+    // Call the actual sign out
+    await stackSignOut()
+  }, [stackSignOut])
   const [products, setProducts] = useState<Product[]>([])
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('offline')
   const [adapterHealth, setAdapterHealth] = useState<'unknown' | 'healthy' | 'degraded'>(
