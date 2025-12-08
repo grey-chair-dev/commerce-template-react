@@ -44,6 +44,10 @@ export default async function handler(req, res) {
         hasSignatureKey: !!signatureKey,
         hasDatabaseUrl: !!databaseUrl,
         signatureKeyLength: signatureKey ? signatureKey.length : 0,
+        signatureKeyPreview: signatureKey ? `${signatureKey.substring(0, 4)}...${signatureKey.substring(signatureKey.length - 4)}` : 'missing',
+        signatureKeySource: process.env.ORDER_WEBHOOK_SIGNATURE_KEY ? 'ORDER_WEBHOOK_SIGNATURE_KEY' : 
+                            process.env.SQUARE_SIGNATURE_KEY ? 'SQUARE_SIGNATURE_KEY' : 
+                            process.env.SQUARE_WEBHOOK_SIGNATURE_KEY ? 'SQUARE_WEBHOOK_SIGNATURE_KEY' : 'none',
         databaseUrlPrefix: databaseUrl ? databaseUrl.substring(0, 20) + '...' : 'missing',
       },
       instructions: {
@@ -62,8 +66,10 @@ export default async function handler(req, res) {
         ],
         signatureVerificationFailing: [
           'Verify ORDER_WEBHOOK_SIGNATURE_KEY matches Square Dashboard',
-          'Check that signature key is from the correct webhook subscription',
+          'Check that signature key is from the correct webhook subscription (order webhook, not inventory)',
           'Ensure signature key has no extra spaces or quotes',
+          'Each webhook subscription has its own unique signature key',
+          'Go to Square Dashboard → Webhooks → find your order webhook → copy the signature key',
         ],
         databaseNotUpdating: [
           'Check database connection string is correct',
