@@ -148,6 +148,7 @@ function App() {
   const [wishlist, setWishlist] = useState<Product[]>([])
   const [isCartSyncing, setIsCartSyncing] = useState(false)
   const lastSyncedUserIdRef = useRef<string | null>(null)
+  const hasAttemptedLoadFromStorageRef = useRef<boolean>(false)
   const [isCartOpen, setCartOpen] = useState(false)
   const [isWishlistOpen, setWishlistOpen] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState<'account' | 'contact' | 'review' | null>(null)
@@ -197,6 +198,9 @@ function App() {
       console.log('[Cart] P.2 - Cart already has items, skipping localStorage load')
       return
     }
+
+    // Mark that we've attempted to load from storage
+    hasAttemptedLoadFromStorageRef.current = true
 
     try {
       const savedCart = localStorage.getItem(CART_STORAGE_KEY)
@@ -249,6 +253,13 @@ function App() {
       return
     }
 
+    // Don't clear localStorage if we haven't tried loading from it yet
+    // This prevents clearing the cart on initial page load before P.2 can load it
+    if (cartItems.length === 0 && !hasAttemptedLoadFromStorageRef.current) {
+      console.log('[Cart] Cart is empty but haven't loaded from storage yet, skipping clear')
+      return
+    }
+
     console.log('[Cart] Guest user - saving to localStorage:', cartItems.length, 'items')
 
     try {
@@ -261,7 +272,7 @@ function App() {
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
         console.log('[Cart] ✅ Saved guest cart to localStorage:', cartItems.length, 'items', cartData)
       } else {
-        // Clear localStorage if cart is empty
+        // Clear localStorage if cart is empty (only after we've attempted to load)
         localStorage.removeItem(CART_STORAGE_KEY)
         console.log('[Cart] ✅ Cleared guest cart from localStorage')
       }
