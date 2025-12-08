@@ -224,8 +224,14 @@ function App() {
     }
   }, [products, user, isLoading, cartItems.length]) // Run when products are loaded, user changes, or loading state changes
 
-  // P.1: Save cart to localStorage on every change
+  // P.1: Save cart to localStorage on every change (for guest users only)
   useEffect(() => {
+    // Only save to localStorage for guest users (not logged in)
+    // Logged-in users use the database instead
+    if (user && user.id) {
+      return
+    }
+
     try {
       if (cartItems.length > 0) {
         // Serialize cart items (only sku and quantity for storage)
@@ -234,16 +240,16 @@ function App() {
           quantity: item.quantity,
         }))
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
-        console.log('[Cart] Saved cart to localStorage:', cartItems.length, 'items')
+        console.log('[Cart] Saved guest cart to localStorage:', cartItems.length, 'items')
       } else {
         // Clear localStorage if cart is empty
         localStorage.removeItem(CART_STORAGE_KEY)
-        console.log('[Cart] Cleared cart from localStorage')
+        console.log('[Cart] Cleared guest cart from localStorage')
       }
     } catch (error) {
-      console.error('[Cart] Failed to save cart to localStorage:', error)
+      console.error('[Cart] Failed to save guest cart to localStorage:', error)
     }
-  }, [cartItems])
+  }, [cartItems, user])
 
   // P.3: Sync cart with database when user logs in
   useEffect(() => {
