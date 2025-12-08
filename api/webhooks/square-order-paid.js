@@ -875,14 +875,26 @@ async function processPaymentEvent(sql, event) {
         
         if (isInitialState) {
           // Map payment status to order status only for initial state
-          if (paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') {
-            // Payment approved - order moves to In Progress
+          // Square payment statuses: APPROVED, COMPLETED, PENDING, FAILED, CANCELED, VOIDED, REFUNDED
+          if (paymentStatus === 'APPROVED') {
+            // Payment approved - order can be processed
             newStatus = 'In Progress';
-          } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELED' || paymentStatus === 'VOIDED') {
-            // Payment failed - order is canceled
+          } else if (paymentStatus === 'COMPLETED') {
+            // Payment completed - order is paid and can be fulfilled
+            // Note: Payment COMPLETED doesn't mean order is completed, just that payment is done
+            // Order completion is determined by fulfillment state, not payment
+            newStatus = 'In Progress'; // Keep as In Progress, fulfillment will update to Ready/Picked Up
+          } else if (paymentStatus === 'REFUNDED') {
+            // Payment refunded - order is refunded
+            newStatus = 'Refunded';
+          } else if (paymentStatus === 'PENDING') {
+            // Payment pending - order stays in New until payment is approved
+            newStatus = 'New';
+          } else if (paymentStatus === 'CANCELED' || paymentStatus === 'FAILED' || paymentStatus === 'VOIDED') {
+            // Payment canceled/failed/voided - order is canceled
             newStatus = 'Canceled';
           }
-          // For other payment statuses (PENDING, etc.), keep current status
+          // For other payment statuses, keep current status
         } else {
           // Order is already in a more advanced state (In Progress, Ready, Picked Up, etc.)
           // Don't change it based on payment status - fulfillment state takes precedence
