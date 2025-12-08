@@ -7,7 +7,20 @@
  * Body: { productId: string, releaseId?: number }
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+// Vercel serverless function types
+type VercelRequest = {
+  method?: string
+  url?: string
+  headers: Record<string, string | string[] | undefined>
+  body?: any
+  query?: Record<string, string | string[] | undefined>
+}
+type VercelResponse = {
+  status: (code: number) => VercelResponse
+  json: (data: any) => void
+  setHeader: (name: string, value: string) => void
+  end: () => void
+}
 import { getDiscogsRelease, extractTracklist, matchProductToDiscogs } from '../../src/services/discogsAdapter.js'
 import { neon } from '@neondatabase/serverless'
 
