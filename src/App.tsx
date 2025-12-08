@@ -256,68 +256,38 @@ function App() {
       try {
         setIsCartSyncing(true)
         lastSyncedUserIdRef.current = user.id
-        console.log('[Cart] User logged in, syncing cart with database...')
+        console.log('[Cart] User logged in, clearing guest cart and loading from database...')
 
-        // Get localStorage cart
-        const savedCart = localStorage.getItem(CART_STORAGE_KEY)
-        const localCartItems = savedCart ? JSON.parse(savedCart) : []
+        // Clear guest cart from localStorage and state when user logs in
+        localStorage.removeItem(CART_STORAGE_KEY)
+        setCartItems([])
+        console.log('[Cart] Cleared guest cart on login')
 
-        if (localCartItems.length === 0) {
-          // No local cart - try to load from database
-          console.log('[Cart] No local cart, loading from database...')
-          const response = await fetch('/api/user/cart', {
-            method: 'GET',
-            credentials: 'include',
-          })
+        // Load cart from database only
+        console.log('[Cart] Loading cart from database...')
+        const response = await fetch('/api/user/cart', {
+          method: 'GET',
+          credentials: 'include',
+        })
 
-          if (response.ok) {
-            const data = await response.json()
-            if (data.success && data.cart && data.cart.length > 0) {
-              console.log('[Cart] Loaded cart from database:', data.cart.length, 'items')
-              setCartItems(data.cart)
-              
-              // Also save to localStorage for offline access
-              const cartData = data.cart.map((item: CartItem) => ({
-                sku: item.id,
-                quantity: item.quantity,
-              }))
-              localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
-            } else {
-              console.log('[Cart] No cart found in database')
-            }
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.cart && data.cart.length > 0) {
+            console.log('[Cart] Loaded cart from database:', data.cart.length, 'items')
+            setCartItems(data.cart)
+            
+            // Save to localStorage for offline access
+            const cartData = data.cart.map((item: CartItem) => ({
+              sku: item.id,
+              quantity: item.quantity,
+            }))
+            localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
           } else {
-            console.error('[Cart] Failed to load cart from database:', response.status)
+            console.log('[Cart] No cart found in database - starting with empty cart')
+            setCartItems([])
           }
         } else {
-          // Merge local cart with database cart
-          console.log('[Cart] Merging local cart with database cart...')
-          const response = await fetch('/api/user/sync-cart', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              localCartItems: localCartItems,
-            }),
-          })
-
-          if (response.ok) {
-            const data = await response.json()
-            if (data.success && data.cart) {
-              console.log('[Cart] Cart synced successfully:', data.cart.length, 'items')
-              setCartItems(data.cart)
-              
-              // Update localStorage with merged cart
-              const mergedCartData = data.cart.map((item: CartItem) => ({
-                sku: item.id,
-                quantity: item.quantity,
-              }))
-              localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(mergedCartData))
-            }
-          } else {
-            console.error('[Cart] Failed to sync cart:', response.status)
-          }
+          console.error('[Cart] Failed to load cart from database:', response.status)
         }
       } catch (error) {
         console.error('[Cart] Error syncing cart on login:', error)
