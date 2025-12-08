@@ -599,10 +599,9 @@ export function OrderConfirmationPage({
                     3
                   </div>
                   <div>
-                    <p className="font-medium text-white">Shipping Updates</p>
+                    <p className="font-medium text-white">Pickup Notification</p>
                     <p className="text-xs text-slate-400">
-                      You'll receive email notifications when your order ships and when it's out for
-                      delivery.
+                      You'll receive an email notification when your order is ready for pickup at the store.
                     </p>
                   </div>
                 </div>
