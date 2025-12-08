@@ -687,6 +687,8 @@ function App() {
   const wishlistCount = effectiveWishlist.length
 
   const addToCart = (product: Product, quantity = 1) => {
+    console.log('[Cart] addToCart called:', { productId: product.id, productName: product.name, quantity, currentCartItems: cartItems.length })
+    
     // Test I-104: Stock Limit - Prevent adding more than available stock
     if (product.stockCount <= 0) {
       alert('This item is sold out and cannot be added to cart.')
@@ -694,6 +696,7 @@ function App() {
     }
     
     setCartItems((prev) => {
+      console.log('[Cart] setCartItems callback - prev items:', prev.length)
       const existing = prev.find((item) => item.id === product.id)
       const currentQuantity = existing ? existing.quantity : 0
       const newQuantity = currentQuantity + quantity
@@ -712,6 +715,7 @@ function App() {
               ? { ...item, quantity: product.stockCount }
               : item,
           )
+          console.log('[Cart] Updated cart (stock limit):', updated.length, 'items')
           saveCartToDatabase(updated)
           return updated
         }
@@ -724,6 +728,8 @@ function App() {
               : item,
           )
         : [...prev, { ...product, quantity }]
+      
+      console.log('[Cart] Updated cart:', updated.length, 'items', updated.map(i => ({ id: i.id, name: i.name, qty: i.quantity })))
       
       // P.4: Save to database if logged in
       saveCartToDatabase(updated)
