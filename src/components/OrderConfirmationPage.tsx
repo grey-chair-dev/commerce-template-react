@@ -521,7 +521,7 @@ export function OrderConfirmationPage({
                 </div>
                 
                 <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-3">
-                  <p className="text-xs font-medium text-white mb-1">📧 Pickup Notifications</p>
+                  <p className="text-xs font-medium text-white mb-1">Pickup Notifications</p>
                   <p className="text-xs text-slate-300">
                     We'll notify you at <span className="font-medium">{contactForm.email || 'your email'}</span> when your order is ready for pickup.
                   </p>
