@@ -29,10 +29,8 @@ type OrderData = {
   }
   status: string
   subtotal: number
-  shipping: number
   tax: number
   total: number
-  shipping_method: string
   pickup_details?: {
     firstName?: string
     lastName?: string
