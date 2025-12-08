@@ -178,25 +178,34 @@ function App() {
   // P.2: Load cart from localStorage on app initialization (after products are loaded)
   // For guest users only - logged-in users load from database in P.3
   useEffect(() => {
+    console.log('[Cart] P.2 useEffect triggered:', { isLoading, productsCount: products.length, hasUser: !!(user && user.id), cartItemsCount: cartItems.length })
+    
     // Wait for auth to finish loading and products to be available
     if (isLoading || products.length === 0) {
+      console.log('[Cart] P.2 - Waiting for products or auth to load')
       return
     }
 
     // Skip if user is logged in (will load from database instead)
     if (user && user.id) {
+      console.log('[Cart] P.2 - User is logged in, skipping localStorage load')
       return
     }
 
     // Only load if cart is empty (to avoid overwriting)
     if (cartItems.length > 0) {
+      console.log('[Cart] P.2 - Cart already has items, skipping localStorage load')
       return
     }
 
     try {
       const savedCart = localStorage.getItem(CART_STORAGE_KEY)
+      console.log('[Cart] P.2 - Checking localStorage:', savedCart ? 'found data' : 'empty')
+      
       if (savedCart) {
         const parsedCart = JSON.parse(savedCart)
+        console.log('[Cart] P.2 - Parsed cart from localStorage:', parsedCart)
+        
         if (Array.isArray(parsedCart) && parsedCart.length > 0) {
           // Match localStorage cart items with current products
           const matchedCart: CartItem[] = []
@@ -207,20 +216,27 @@ function App() {
                 ...product,
                 quantity: item.quantity,
               })
+            } else {
+              console.log('[Cart] P.2 - Product not found or invalid quantity:', { sku: item.sku, quantity: item.quantity, productFound: !!product })
             }
           }
           
           if (matchedCart.length > 0) {
-            console.log('[Cart] Loaded cart from localStorage:', matchedCart.length, 'items')
+            console.log('[Cart] ✅ Loaded cart from localStorage:', matchedCart.length, 'items', matchedCart.map(i => ({ id: i.id, name: i.name, qty: i.quantity })))
             setCartItems(matchedCart)
           } else {
+            console.log('[Cart] P.2 - No valid items found, clearing localStorage')
             // Clear invalid cart data
             localStorage.removeItem(CART_STORAGE_KEY)
           }
+        } else {
+          console.log('[Cart] P.2 - Invalid cart format in localStorage')
         }
+      } else {
+        console.log('[Cart] P.2 - No cart found in localStorage')
       }
     } catch (error) {
-      console.error('[Cart] Failed to load cart from localStorage:', error)
+      console.error('[Cart] ❌ Failed to load cart from localStorage:', error)
     }
   }, [products, user, isLoading, cartItems.length]) // Run when products are loaded, user changes, or loading state changes
 
