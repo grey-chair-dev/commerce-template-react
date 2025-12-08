@@ -866,45 +866,44 @@ async function processPaymentEvent(sql, event) {
         const currentStatus = orderResult[0].status;
         
         // Update order with payment info
-        // Payment status should only update order status if it's still New
-        // Don't override more advanced statuses (In Progress, Ready, etc.)
+        // Track payment_status separately from order status (fulfillment status)
+        // Order status is determined by fulfillment state, not payment status
+        // Payment status only affects order status in specific cases (payment failures)
+        
         let newStatus = currentStatus;
+        let newPaymentStatus = paymentStatus; // Store payment status separately
         
-        // Only update status if order is still in initial state
-        const isInitialState = currentStatus === 'New';
+        // Only update order status based on payment status in specific cases:
+        // 1. Payment failed/canceled/voided → Order should be Canceled
+        // 2. Payment refunded → Order should be Refunded
+        // 3. Payment approved/completed → Order status stays as-is (fulfillment determines status)
         
-        if (isInitialState) {
-          // Map payment status to order status only for initial state
-          // Square payment statuses: APPROVED, COMPLETED, PENDING, FAILED, CANCELED, VOIDED, REFUNDED
-          if (paymentStatus === 'APPROVED') {
-            // Payment approved - order can be processed
+        if (paymentStatus === 'REFUNDED') {
+          // Payment refunded - order is refunded
+          newStatus = 'Refunded';
+        } else if (paymentStatus === 'CANCELED' || paymentStatus === 'FAILED' || paymentStatus === 'VOIDED') {
+          // Payment canceled/failed/voided - order should be canceled
+          newStatus = 'Canceled';
+        } else if (paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') {
+          // Payment approved/completed - order can be processed
+          // Only update order status if it's still New
+          if (currentStatus === 'New') {
             newStatus = 'In Progress';
-          } else if (paymentStatus === 'COMPLETED') {
-            // Payment completed - order is paid and can be fulfilled
-            // Note: Payment COMPLETED doesn't mean order is completed, just that payment is done
-            // Order completion is determined by fulfillment state, not payment
-            newStatus = 'In Progress'; // Keep as In Progress, fulfillment will update to Ready/Picked Up
-          } else if (paymentStatus === 'REFUNDED') {
-            // Payment refunded - order is refunded
-            newStatus = 'Refunded';
-          } else if (paymentStatus === 'PENDING') {
-            // Payment pending - order stays in New until payment is approved
-            newStatus = 'New';
-          } else if (paymentStatus === 'CANCELED' || paymentStatus === 'FAILED' || paymentStatus === 'VOIDED') {
-            // Payment canceled/failed/voided - order is canceled
-            newStatus = 'Canceled';
           }
-          // For other payment statuses, keep current status
-        } else {
-          // Order is already in a more advanced state (In Progress, Ready, Picked Up, etc.)
-          // Don't change it based on payment status - fulfillment state takes precedence
-          console.log(`[Webhook] Order already in advanced state "${currentStatus}" - not updating based on payment status "${paymentStatus}"`);
+          // Otherwise, fulfillment state determines order status
+        } else if (paymentStatus === 'PENDING') {
+          // Payment pending - order stays in New
+          if (currentStatus === 'New') {
+            newStatus = 'New';
+          }
         }
+        // For other payment statuses, keep current order status
         
         await sql`
           UPDATE orders 
           SET 
             status = ${newStatus},
+            payment_status = ${newPaymentStatus},
             square_payment_id = ${squarePaymentId},
             payment_method = 'square',
             updated_at = NOW()
