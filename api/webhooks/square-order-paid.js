@@ -167,30 +167,31 @@ async function processOrderUpdate(sql, event) {
     
     // Map Square fulfillment state to our order status (priority over order state)
     // Square fulfillment states: PROPOSED, RESERVED, PREPARED, COMPLETED, CANCELED
-    let orderStatus = 'pending'; // Default
+    // Our statuses: New, In Progress, Ready, Picked Up, Completed, Canceled, Refunded
+    let orderStatus = 'New'; // Default
     
     if (fulfillmentState) {
       // Fulfillment state takes priority (more specific)
       const fulfillmentStatusMap = {
-        'PROPOSED': 'processing',
-        'RESERVED': 'processing',
-        'PREPARED': 'ready for pickup',
-        'COMPLETED': 'picked up',
-        'CANCELED': 'cancelled',
-        'CANCELLED': 'cancelled', // Handle both spellings
+        'PROPOSED': 'In Progress',
+        'RESERVED': 'In Progress',
+        'PREPARED': 'Ready',
+        'COMPLETED': 'Picked Up',
+        'CANCELED': 'Canceled',
+        'CANCELLED': 'Canceled', // Handle both spellings
       };
       orderStatus = fulfillmentStatusMap[fulfillmentState] || orderStatus;
       console.log(`[Webhook] Mapped fulfillment state "${fulfillmentState}" to database status: "${orderStatus}"`);
     } else {
       // Fallback to order state if no fulfillment state
       const statusMap = {
-        'DRAFT': 'pending',
-        'OPEN': 'confirmed',
-        'COMPLETED': 'confirmed',
-        'CANCELED': 'cancelled',
-        'CANCELLED': 'cancelled',
+        'DRAFT': 'New',
+        'OPEN': 'In Progress',
+        'COMPLETED': 'Completed',
+        'CANCELED': 'Canceled',
+        'CANCELLED': 'Canceled',
       };
-      orderStatus = statusMap[orderState] || 'pending';
+      orderStatus = statusMap[orderState] || 'New';
       console.log(`[Webhook] No fulfillment state found, mapped order state "${orderState}" to database status: "${orderStatus}"`);
       console.log(`[Webhook] WARNING: Order state fallback used - fulfillment state may not be in webhook payload`);
     }
@@ -865,25 +866,25 @@ async function processPaymentEvent(sql, event) {
         const currentStatus = orderResult[0].status;
         
         // Update order with payment info
-        // Payment status should only update order status if it's still pending
-        // Don't override more advanced statuses (processing, ready for pickup, etc.)
+        // Payment status should only update order status if it's still New
+        // Don't override more advanced statuses (In Progress, Ready, etc.)
         let newStatus = currentStatus;
         
-        // Only update status if order is still in initial states
-        const isInitialState = currentStatus === 'pending' || currentStatus === 'confirmed';
+        // Only update status if order is still in initial state
+        const isInitialState = currentStatus === 'New';
         
         if (isInitialState) {
-          // Map payment status to order status only for initial states
+          // Map payment status to order status only for initial state
           if (paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') {
-            // Payment approved - order is confirmed
-            newStatus = 'confirmed';
+            // Payment approved - order moves to In Progress
+            newStatus = 'In Progress';
           } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELED' || paymentStatus === 'VOIDED') {
-            // Payment failed - order is cancelled
-            newStatus = 'cancelled';
+            // Payment failed - order is canceled
+            newStatus = 'Canceled';
           }
           // For other payment statuses (PENDING, etc.), keep current status
         } else {
-          // Order is already in a more advanced state (processing, ready for pickup, etc.)
+          // Order is already in a more advanced state (In Progress, Ready, Picked Up, etc.)
           // Don't change it based on payment status - fulfillment state takes precedence
           console.log(`[Webhook] Order already in advanced state "${currentStatus}" - not updating based on payment status "${paymentStatus}"`);
         }
