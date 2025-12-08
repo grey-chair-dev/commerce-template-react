@@ -221,7 +221,7 @@ export const StackAuthProvider = ({ children }: { children: ReactNode }) => {
   const handleSignOut = useCallback(async () => {
     // Clear cart from localStorage when signing out
     try {
-      const CART_STORAGE_KEY = 'spiral_groove_cart'
+      const CART_STORAGE_KEY = 'lct_cart' // Match the key used in App.tsx
       localStorage.removeItem(CART_STORAGE_KEY)
       console.log('[StackAuthProvider] Cleared cart from localStorage on sign out')
     } catch (error) {
