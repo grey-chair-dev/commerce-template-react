@@ -15,6 +15,7 @@
 import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
 import { randomUUID } from 'crypto';
+import { SquareClient, SquareEnvironment } from 'square';
 
 /**
  * Verify Square webhook signature
@@ -587,10 +588,134 @@ async function processOrderUpdate(sql, event) {
         throw error; // Re-throw to trigger webhook error handling
       }
     } else {
-      // Order doesn't exist - create new order with transaction
+      // Order doesn't exist - fetch full order details from Square API
+      // The webhook payload is minimal, so we need to fetch the full order to get line items, amounts, etc.
+      console.log(`[Webhook] Order ${squareOrderId} not found in database - fetching full order from Square API`);
+      
+      try {
+        // Initialize Square client
+        const squareAccessToken = process.env.SQUARE_ACCESS_TOKEN?.trim();
+        const squareEnvironment = (process.env.SQUARE_ENVIRONMENT || 'sandbox').toLowerCase().trim();
+        
+        if (!squareAccessToken) {
+          console.warn(`[Webhook] SQUARE_ACCESS_TOKEN not configured - cannot fetch full order details`);
+          console.warn(`[Webhook] Order will be created with minimal data from webhook payload`);
+        } else {
+          const squareClient = new SquareClient({
+            accessToken: squareAccessToken,
+            environment: squareEnvironment === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
+          });
+          
+          // Fetch full order from Square
+          const orderResponse = await squareClient.orders.retrieveOrder(squareOrderId);
+          
+          if (orderResponse.result && orderResponse.result.order) {
+            const fullOrder = orderResponse.result.order;
+            console.log(`[Webhook] Fetched full order from Square API`);
+            
+            // Use full order data instead of minimal webhook payload
+            orderObject = fullOrder;
+            
+            // Re-extract data from full order
+            orderState = fullOrder.state || 'DRAFT';
+            version = fullOrder.version || 0;
+            
+            // Re-extract line items, amounts, fulfillments from full order
+            const fullLineItems = fullOrder.lineItems || [];
+            extractedLineItems = fullLineItems.map((item, index) => {
+              const basePriceMoney = item.basePriceMoney || {};
+              const basePrice = basePriceMoney.amount ? Number(basePriceMoney.amount) / 100 : 0;
+              
+              const grossSalesMoney = item.grossSalesMoney || {};
+              const grossSales = grossSalesMoney.amount ? Number(grossSalesMoney.amount) / 100 : 0;
+              
+              const totalMoney = item.totalMoney || {};
+              const total = totalMoney.amount ? Number(totalMoney.amount) / 100 : 0;
+              
+              return {
+                uid: item.uid || `item-${index}`,
+                catalog_object_id: item.catalogObjectId || null,
+                catalog_version: item.catalogVersion || null,
+                name: item.name || 'Unknown Item',
+                quantity: item.quantity || '1',
+                item_type: item.itemType || 'ITEM',
+                base_price: basePrice,
+                gross_sales: grossSales,
+                total: total,
+                variation_name: item.variationName || null,
+              };
+            });
+            
+            // Re-extract amounts from full order
+            const fullNetAmounts = fullOrder.netAmounts || {};
+            const fullTotalMoney = fullNetAmounts.totalMoney || {};
+            totalAmount = fullTotalMoney.amount ? Number(fullTotalMoney.amount) / 100 : 0;
+            
+            const fullSubtotalMoney = fullNetAmounts.subtotalMoney || fullTotalMoney || {};
+            subtotalAmount = fullSubtotalMoney.amount ? Number(fullSubtotalMoney.amount) / 100 : 0;
+            
+            const fullTaxMoney = fullNetAmounts.taxMoney || {};
+            taxAmount = fullTaxMoney.amount ? Number(fullTaxMoney.amount) / 100 : 0;
+            
+            const fullShippingMoney = fullNetAmounts.shippingMoney || {};
+            shippingAmount = fullShippingMoney.amount ? Number(fullShippingMoney.amount) / 100 : 0;
+            
+            // Re-extract fulfillments from full order
+            const fullFulfillments = fullOrder.fulfillments || [];
+            fulfillments = fullFulfillments;
+            
+            // Re-extract fulfillment state
+            if (fullFulfillments.length > 0) {
+              const firstFulfillment = fullFulfillments[0];
+              fulfillmentState = firstFulfillment.state || firstFulfillment.fulfillmentState || null;
+              if (fulfillmentState) {
+                fulfillmentState = String(fulfillmentState).toUpperCase();
+              }
+            }
+            
+            // Re-map status based on fulfillment state
+            if (fulfillmentState) {
+              const fulfillmentStatusMap = {
+                'PROPOSED': 'processing',
+                'RESERVED': 'processing',
+                'PREPARED': 'ready for pickup',
+                'COMPLETED': 'picked up',
+                'CANCELED': 'cancelled',
+                'CANCELLED': 'cancelled',
+              };
+              orderStatus = fulfillmentStatusMap[fulfillmentState] || orderStatus;
+            }
+            
+            // Re-extract pickup details
+            const fullPickupFulfillment = fullFulfillments.find(f => f.type === 'PICKUP' || f.fulfillmentType === 'PICKUP');
+            if (fullPickupFulfillment) {
+              const fullPickupDetailsData = fullPickupFulfillment.pickupDetails || fullPickupFulfillment.pickup_details;
+              if (fullPickupDetailsData) {
+                const fullRecipient = fullPickupDetailsData.recipient || {};
+                pickupDetails = {
+                  email: fullRecipient.emailAddress || null,
+                  phone: fullRecipient.phoneNumber || null,
+                  name: fullRecipient.displayName || null,
+                  scheduled_at: fullPickupDetailsData.scheduledAt || null,
+                  pickup_at: fullPickupDetailsData.pickupAt || null,
+                  prep_time_duration: fullPickupDetailsData.prepTimeDuration || null,
+                };
+              }
+            }
+            
+            console.log(`[Webhook] Re-extracted from full order: ${extractedLineItems.length} items, $${totalAmount} total`);
+          } else {
+            console.warn(`[Webhook] Could not fetch full order from Square API - using minimal webhook data`);
+          }
+        }
+      } catch (fetchError) {
+        console.error(`[Webhook] Error fetching full order from Square:`, fetchError.message);
+        console.warn(`[Webhook] Continuing with minimal webhook payload data`);
+      }
+      
       // Generate order number from Square order ID or reference_id
-      const orderNumber = orderObject?.reference_id || 
-                         orderObject?.referenceId || 
+      const orderNumber = orderObject?.referenceId || 
+                         orderObject?.reference_id || 
                          `ORD-${squareOrderId.substring(0, 8).toUpperCase()}`;
       
       // Generate order ID (UUID)
