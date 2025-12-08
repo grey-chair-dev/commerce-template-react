@@ -285,7 +285,11 @@
         {
           "source": "/api/monitoring/auth-failure-rate",
           "destination": "/api/monitoring/auth-failure-rate.js"
-        }
+        },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "crons": [
     {
