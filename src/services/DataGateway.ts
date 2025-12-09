@@ -45,6 +45,8 @@ export interface GetProductsOptions {
 export interface Order {
   id: string
   order_number: string
+  square_order_id?: string
+  square_payment_id?: string
   status: string
   payment_status?: string
   total: number
@@ -53,21 +55,42 @@ export interface Order {
   shipping?: number
   items: OrderItem[]
   customer?: {
-    name: string
+    id?: string
+    name: {
+      first: string
+      last: string
+      full: string
+    }
     email: string
+    phone?: string
   }
   shipping_address?: Address
+  shipping_method?: string
+  pickup_details?: {
+    firstName?: string
+    lastName?: string
+    email?: string
+    phone?: string
+    fulfillmentType?: string
+  }
+  pickup_status?: {
+    status: 'ready' | 'processing' | 'pending'
+    message: string
+  }
+  payment_method?: string
   created_at: string
   updated_at: string
 }
 
 export interface OrderItem {
-  id: string
+  id: string | number
   product_id: string
   product_name: string
   quantity: number
   price: number
-  total: number
+  subtotal: number
+  image_url?: string
+  category?: string
 }
 
 export interface Address {

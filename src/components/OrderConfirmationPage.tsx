@@ -5,6 +5,7 @@ import { moneyFormatter } from '../formatters'
 import { Header } from './Header'
 import { Footer } from './Footer'
 import type { Product } from '../dataAdapter'
+import type { Order } from '../services/DataGateway'
 
 type ContactForm = {
   email: string
@@ -12,47 +13,6 @@ type ContactForm = {
   lastName: string
   phone: string
   pickupLocation?: string
-}
-
-type OrderData = {
-  id: string
-  order_number: string
-  square_order_id?: string
-  customer: {
-    name: {
-      first: string
-      last: string
-      full: string
-    }
-    email: string
-    phone: string
-  }
-  status: string
-  subtotal: number
-  tax: number
-  total: number
-  pickup_details?: {
-    firstName?: string
-    lastName?: string
-    email?: string
-    phone?: string
-    fulfillmentType?: string
-  }
-  pickup_status?: {
-    status: 'ready' | 'processing' | 'pending'
-    message: string
-  }
-  items: Array<{
-    id: number
-    product_id: string
-    product_name: string
-    quantity: number
-    price: number
-    subtotal: number
-    image_url: string
-    category: string
-  }>
-  created_at: string
 }
 
 type OrderConfirmationPageProps = {
@@ -117,7 +77,7 @@ export function OrderConfirmationPage({
   onTermsOfService,
 }: OrderConfirmationPageProps) {
   const [searchParams] = useSearchParams()
-  const [orderData, setOrderData] = useState<OrderData | null>(null)
+  const [orderData, setOrderData] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -179,7 +139,8 @@ export function OrderConfirmationPage({
           return
         }
 
-        const data = await response.json()
+        // DataGateway.getOrder() returns ApiResponse<Order>, so use response.data directly
+        const data = response.data
         
         // Validate response data
         if (!data || !data.order_number) {
@@ -242,10 +203,10 @@ export function OrderConfirmationPage({
   const total = cartSubtotal + estimatedTax
 
   // Build contact form from order data or use props
-  const contactForm: ContactForm = orderData ? {
+  const contactForm: ContactForm = orderData?.customer ? {
     email: orderData.customer.email || orderData.pickup_details?.email || '',
-    firstName: orderData.customer.name.first || orderData.pickup_details?.firstName || '',
-    lastName: orderData.customer.name.last || orderData.pickup_details?.lastName || '',
+    firstName: orderData.customer.name?.first || orderData.pickup_details?.firstName || '',
+    lastName: orderData.customer.name?.last || orderData.pickup_details?.lastName || '',
     phone: orderData.customer.phone || orderData.pickup_details?.phone || '',
   } : (propContactForm || {
     email: '',
