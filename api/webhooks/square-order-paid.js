@@ -16,6 +16,8 @@ import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
 import { randomUUID } from 'crypto';
 import { SquareClient, SquareEnvironment } from 'square';
+import { sendEmail } from '../utils/email.js';
+import { getOrderConfirmationEmail, getOrderStatusUpdateEmail } from '../utils/email-templates.js';
 
 /**
  * Verify Square webhook signature
@@ -437,6 +439,13 @@ async function processOrderUpdate(sql, event) {
             console.log(`✅ Successfully updated order ${orderId} status from "${currentStatus}" to "${orderStatus}"`);
             console.log(`[Webhook] Update result:`, JSON.stringify(updateResult[0], null, 2));
             
+            // Send status update email if status changed to a notable status
+            if (orderStatus !== currentStatus) {
+              sendOrderStatusUpdateEmail(sql, orderId, orderStatus, currentStatus).catch(err => {
+                console.error(`[Email] Failed to send status update email:`, err);
+              });
+            }
+            
             return {
               orderId: orderId,
               action: 'status_updated',
@@ -834,6 +843,192 @@ async function processOrderUpdate(sql, event) {
 }
 
 /**
+ * Send order confirmation email when payment is approved
+ */
+async function sendOrderConfirmationEmail(sql, orderId) {
+  try {
+    // Fetch order details with customer and items
+    const orderResult = await sql`
+      SELECT 
+        o.id,
+        o.order_number,
+        o.status,
+        o.subtotal,
+        o.tax,
+        o.total,
+        o.pickup_details,
+        o.created_at,
+        c.email as customer_email,
+        c.first_name,
+        c.last_name
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      WHERE o.id = ${orderId}
+    `;
+
+    if (!orderResult || orderResult.length === 0) {
+      console.log(`[Email] Order ${orderId} not found, skipping confirmation email`);
+      return;
+    }
+
+    const order = orderResult[0];
+    
+    // Get customer email from order or pickup details
+    const customerEmail = order.customer_email || order.pickup_details?.email;
+    if (!customerEmail) {
+      console.log(`[Email] No email found for order ${orderId}, skipping confirmation email`);
+      return;
+    }
+
+    // Fetch order items
+    const itemsResult = await sql`
+      SELECT 
+        oi.quantity,
+        oi.price,
+        oi.subtotal,
+        p.name,
+        p.image_url
+      FROM order_items oi
+      LEFT JOIN products p ON p.id = oi.product_id
+      WHERE oi.order_id = ${orderId}
+    `;
+
+    const items = itemsResult.map(item => ({
+      name: item.name || 'Unknown Item',
+      quantity: item.quantity,
+      price: item.price,
+      imageUrl: item.image_url,
+    }));
+
+    const customerName = order.first_name && order.last_name
+      ? `${order.first_name} ${order.last_name}`
+      : order.first_name || order.pickup_details?.firstName || customerEmail.split('@')[0];
+
+    const orderDate = new Date(order.created_at).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const { html, text } = getOrderConfirmationEmail({
+      orderNumber: order.order_number,
+      customerName,
+      customerEmail,
+      items,
+      subtotal: Number(order.subtotal),
+      tax: Number(order.tax),
+      total: Number(order.total),
+      orderDate,
+      pickupDetails: order.pickup_details,
+    });
+
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_SITE_URL || 'https://spiralgrooverecords.greychair.io';
+
+    await sendEmail({
+      to: customerEmail,
+      subject: `Order Confirmation - ${order.order_number} - Spiral Groove Records`,
+      html,
+      text,
+      emailType: 'order-confirmation',
+      orderNumber: order.order_number,
+      orderId: order.id,
+      customerName,
+      orderUrl: `${baseUrl}/order-confirmation?id=${order.id}`,
+    });
+
+    console.log(`[Email] ✅ Order confirmation email sent for order ${order.order_number} to ${customerEmail}`);
+  } catch (error) {
+    // Don't fail webhook if email fails
+    console.error(`[Email] ❌ Failed to send order confirmation email:`, error);
+  }
+}
+
+/**
+ * Send order status update email (e.g., ready for pickup)
+ */
+async function sendOrderStatusUpdateEmail(sql, orderId, newStatus, previousStatus) {
+  try {
+    // Only send emails for specific status changes
+    const statusesToEmail = ['Ready', 'Picked Up', 'Completed', 'Canceled', 'Refunded'];
+    if (!statusesToEmail.includes(newStatus)) {
+      return; // Don't send email for other status changes
+    }
+
+    // Fetch order details
+    const orderResult = await sql`
+      SELECT 
+        o.id,
+        o.order_number,
+        o.status,
+        o.pickup_details,
+        c.email as customer_email,
+        c.first_name,
+        c.last_name
+      FROM orders o
+      LEFT JOIN customers c ON c.id = o.customer_id
+      WHERE o.id = ${orderId}
+    `;
+
+    if (!orderResult || orderResult.length === 0) {
+      return;
+    }
+
+    const order = orderResult[0];
+    const customerEmail = order.customer_email || order.pickup_details?.email;
+    if (!customerEmail) {
+      return;
+    }
+
+    const customerName = order.first_name && order.last_name
+      ? `${order.first_name} ${order.last_name}`
+      : order.first_name || order.pickup_details?.firstName || customerEmail.split('@')[0];
+
+    const statusMessages = {
+      'Ready': 'Your order is ready for pickup! Come by the store during our business hours.',
+      'Picked Up': 'Your order has been picked up. Thank you for shopping with us!',
+      'Completed': 'Your order has been completed. Thank you for your purchase!',
+      'Canceled': 'Your order has been canceled. If you have questions, please contact us.',
+      'Refunded': 'Your order has been refunded. The refund will be processed to your original payment method.',
+    };
+
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_SITE_URL || 'https://spiralgrooverecords.greychair.io';
+
+    const { html, text } = getOrderStatusUpdateEmail({
+      orderNumber: order.order_number,
+      customerName,
+      status: newStatus,
+      statusMessage: statusMessages[newStatus] || `Your order status has been updated to ${newStatus}.`,
+      items: [], // Could fetch items if needed
+      orderUrl: `${baseUrl}/order-confirmation?id=${order.id}`,
+    });
+
+    await sendEmail({
+      to: customerEmail,
+      subject: `Order ${order.order_number} - ${newStatus} - Spiral Groove Records`,
+      html,
+      text,
+      emailType: 'order-status-update',
+      orderNumber: order.order_number,
+      orderId: order.id,
+      status: newStatus,
+      previousStatus,
+      customerName,
+    });
+
+    console.log(`[Email] ✅ Status update email sent for order ${order.order_number} (${previousStatus} → ${newStatus}) to ${customerEmail}`);
+  } catch (error) {
+    // Don't fail webhook if email fails
+    console.error(`[Email] ❌ Failed to send status update email:`, error);
+  }
+}
+
+/**
  * Process payment.created or payment.updated event
  */
 async function processPaymentEvent(sql, event) {
@@ -911,6 +1106,14 @@ async function processPaymentEvent(sql, event) {
         `;
         
         console.log(`✅ Updated order ${orderId_db} with payment ${squarePaymentId}, status: ${newStatus}`);
+        
+        // Send order confirmation email when payment is approved/completed
+        if ((paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') && currentStatus === 'New') {
+          // Payment just approved - send confirmation email
+          sendOrderConfirmationEmail(sql, orderId_db).catch(err => {
+            console.error(`[Email] Failed to send confirmation email:`, err);
+          });
+        }
         
         return { orderId: orderId_db, paymentId: squarePaymentId, action: 'payment_processed', status: newStatus };
       } else {

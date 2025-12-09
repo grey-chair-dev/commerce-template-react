@@ -14,6 +14,8 @@ import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
+import { sendEmail } from '../utils/email.js';
+import { getWelcomeEmail } from '../utils/email-templates.js';
 
 const sql = neon(process.env.SPR_DATABASE_URL);
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -230,6 +232,29 @@ export default async function handler(req, res) {
         console.error('[Register] Failed to generate JWT token:', tokenError);
         // Continue without token - user can sign in separately
       }
+    }
+
+    // Send welcome email (non-blocking - don't fail registration if email fails)
+    try {
+      const { html, text } = getWelcomeEmail({
+        firstName: finalFirstName,
+        lastName: finalLastName,
+        email: normalizedEmail,
+      });
+
+      await sendEmail({
+        to: normalizedEmail,
+        subject: 'Welcome to Spiral Groove Records!',
+        html,
+        text,
+        emailType: 'welcome',
+        customerName: finalFirstName || normalizedEmail.split('@')[0],
+      });
+
+      console.log('[Register] Welcome email sent to:', normalizedEmail);
+    } catch (emailError) {
+      // Log error but don't fail registration
+      console.error('[Register] Failed to send welcome email:', emailError);
     }
 
     // Step E: Return success response

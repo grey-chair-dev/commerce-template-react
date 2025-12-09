@@ -60,12 +60,14 @@ async function sendViaMake({ to, subject, html, text, ...additionalData }) {
 
   // Prepare payload for Make.com
   // Make.com will receive this data and handle the email sending
+  // Always include emailType for routing in Make.com
   const payload = {
     to,
     subject,
     html,
     text: text || html.replace(/<[^>]*>/g, ''), // Strip HTML if no text provided
-    ...additionalData, // Include any additional data (e.g., customerName, resetUrl, etc.)
+    emailType: emailType || 'generic', // Always include emailType for Make.com routing
+    ...additionalData, // Include any additional data (e.g., customerName, resetUrl, orderNumber, etc.)
   };
 
   console.log(`[Email] Sending to Make.com webhook: ${cleanWebhookUrl.substring(0, 50)}...`);
@@ -267,10 +269,11 @@ async function sendViaResend({ to, subject, html, text }) {
  * @param {string} options.subject - Email subject
  * @param {string} options.html - HTML email content
  * @param {string} [options.text] - Plain text email content (optional)
+ * @param {string} [options.emailType] - Type of email (welcome, order-confirmation, order-status-update, password-reset) (optional)
  * @param {Object} [options.additionalData] - Additional data to pass to the email service (optional)
  * @returns {Promise<{success: boolean, provider: string}>}
  */
-export async function sendEmail({ to, subject, html, text, ...additionalData }) {
+export async function sendEmail({ to, subject, html, text, emailType, ...additionalData }) {
   const esp = detectESP();
   
   if (!esp) {
