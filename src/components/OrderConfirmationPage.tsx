@@ -144,79 +144,36 @@ export function OrderConfirmationPage({
         setError(null)
 
         // Determine API base URL
-        // Fix for Error -107: Always use HTTP for localhost to avoid SSL errors
-        // This is critical - the API request to fetch order details must use HTTP
+        // For local development, use the backend server (port 3000)
+        // For production, use the same origin (Vercel handles routing)
         const isLocalDev = typeof window !== 'undefined' &&
           (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         
-        // ALWAYS use HTTP for localhost API calls (even if page is on HTTPS due to HSTS)
-        // This prevents Error -107 when fetching order details from the database
         let apiBaseUrl
         if (isLocalDev) {
-          // For localhost, always use HTTP (ignore VITE_API_URL if it's HTTPS)
-          const envUrl = import.meta.env.VITE_API_URL
-          if (envUrl && envUrl.startsWith('http://')) {
-            apiBaseUrl = envUrl
-          } else {
-            // Force HTTP for localhost
-            apiBaseUrl = 'http://localhost:3000'
-          }
-          console.log('[Order Confirmation] Using HTTP for localhost API:', apiBaseUrl)
+          // For localhost, use the backend API server on port 3000
+          // The frontend runs on 5173, but API calls go to 3000
+          apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+          console.log('[Order Confirmation] Using localhost API:', apiBaseUrl)
         } else {
-          // Production: use window.location.origin (will be HTTPS)
+          // Production: use window.location.origin (Vercel handles API routing)
           apiBaseUrl = typeof window !== 'undefined' 
             ? window.location.origin 
             : 'http://localhost:3000'
+          console.log('[Order Confirmation] Using production API:', apiBaseUrl)
         }
 
         // Fetch order details from database via API
-        // This is the API request that was causing Error -107
-        const apiUrl = `${apiBaseUrl}/api/order/details?orderId=${encodeURIComponent(orderId)}`
+        const apiUrl = `${apiBaseUrl}/api/order/details?id=${encodeURIComponent(orderId)}`
         console.log('[Order Confirmation] Fetching order details from API:', apiUrl)
         
-        let response
-        try {
-          response = await fetch(apiUrl, {
-            method: 'GET',
-            credentials: 'include', // Include cookies for authentication
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-        } catch (fetchError) {
-          // Handle SSL/HTTPS errors (Error -107)
-          // This happens when browser forces HTTPS but server only serves HTTP
-          const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError)
-          console.error('[Order Confirmation] API request failed:', errorMsg)
-          
-          if (errorMsg.includes('SSL') || 
-              errorMsg.includes('TLS') || 
-              errorMsg.includes('certificate') ||
-              errorMsg.includes('ERR_SSL') ||
-              errorMsg.includes('ERR_CERT') ||
-              errorMsg.includes('Failed to fetch') ||
-              errorMsg.includes('net::ERR')) {
-            console.warn('[Order Confirmation] SSL/HTTPS error detected (Error -107), retrying with explicit HTTP')
-            // Retry with explicit HTTP (force protocol)
-            const httpUrl = apiUrl.replace('https://', 'http://')
-            try {
-              response = await fetch(httpUrl, {
-                method: 'GET',
-                credentials: 'include',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-              })
-              console.log('[Order Confirmation] HTTP retry successful')
-            } catch (retryError) {
-              const retryMsg = retryError instanceof Error ? retryError.message : String(retryError)
-              console.error('[Order Confirmation] HTTP retry also failed:', retryMsg)
-              throw new Error(`Failed to connect to API server. Please ensure the server is running on http://localhost:3000. Error: ${retryMsg}`)
-            }
-          } else {
-            throw fetchError
-          }
-        }
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          credentials: 'include', // Include cookies for authentication
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
         
         if (!response.ok) {
           if (response.status === 404) {
@@ -507,8 +464,11 @@ export function OrderConfirmationPage({
                 {/* Pickup Instructions */}
                 <div className="mt-4 space-y-2">
                   <p className="font-medium text-white">Store Location</p>
-                  <p className="text-base">118 Grove St, San Francisco, CA 94102</p>
-                  <p className="text-sm text-slate-400 mt-1">Hours: Open daily · 8a - 8p</p>
+                  <p className="text-base">215B Main St, Milford, OH 45150</p>
+                  <p className="text-sm text-slate-400 mt-1">Hours: Open 12–9 PM daily</p>
+                  <p className="text-sm text-slate-400">
+                    <a href="tel:+15136008018" className="text-primary hover:underline">(513) 600-8018</a>
+                  </p>
                 </div>
                 
                 {/* Pickup Status */}
