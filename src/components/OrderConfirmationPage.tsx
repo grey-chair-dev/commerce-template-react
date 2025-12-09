@@ -262,17 +262,19 @@ export function OrderConfirmationPage({
 
   // Use fetched data or fall back to props
   const orderNumber = orderData?.order_number || propOrderNumber || ''
-  const cartItems = orderData?.items.map(item => ({
-    id: item.product_id,
-    name: item.product_name,
-    price: item.price,
-    quantity: item.quantity,
-    imageUrl: item.image_url,
-    category: item.category,
-    stockCount: 0,
-  })) || propCartItems || []
-  const cartSubtotal = orderData?.subtotal || propCartSubtotal || 0
-  const estimatedTax = orderData?.tax || propEstimatedTax || 0
+  const cartItems = orderData?.items && Array.isArray(orderData.items) 
+    ? orderData.items.map(item => ({
+        id: item.product_id,
+        name: item.product_name || 'Product',
+        price: item.price || 0,
+        quantity: item.quantity || 0,
+        imageUrl: item.image_url || '',
+        category: item.category || '',
+        stockCount: 0,
+      }))
+    : (propCartItems || [])
+  const cartSubtotal = orderData?.subtotal ?? propCartSubtotal ?? 0
+  const estimatedTax = orderData?.tax ?? propEstimatedTax ?? 0
   const total = cartSubtotal + estimatedTax
 
   // Build contact form from order data or use props
