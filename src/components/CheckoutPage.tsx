@@ -90,16 +90,20 @@ export function CheckoutPage({
         phone: user.phone || '',
       }
       onSetContactForm(contactFormData)
-      navigate('/checkout?step=review', { replace: true })
+      // Use setTimeout to ensure contact form is set before navigation
+      setTimeout(() => {
+        navigate('/checkout?step=review', { replace: true })
+      }, 0)
     }
   }, [user, isLoading, step, navigate, onSetContactForm])
 
   // If review step but no contact form, redirect to account
+  // BUT: Don't redirect if user is logged in (they might be in the process of setting contact form)
   useEffect(() => {
-    if (step === 'review' && !contactForm) {
+    if (step === 'review' && !contactForm && (!user || isLoading)) {
       navigate('/checkout?step=account', { replace: true })
     }
-  }, [step, contactForm, navigate])
+  }, [step, contactForm, navigate, user, isLoading])
 
   // Default: redirect to account for invalid steps
   useEffect(() => {
