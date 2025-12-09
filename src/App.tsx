@@ -2527,13 +2527,15 @@ function App() {
             }
           }}
           onSignIn={() => {
-            // Mark that we should return to checkout after login
+            // Mark that we should return to checkout review after login
             sessionStorage.setItem('return_to_checkout', 'true')
+            sessionStorage.setItem('return_to_checkout_step', 'review')
             handleNavigate.toLogin()
           }}
           onSignUp={() => {
-            // Mark that we should return to checkout after signup
+            // Mark that we should return to checkout review after signup
             sessionStorage.setItem('return_to_checkout', 'true')
+            sessionStorage.setItem('return_to_checkout_step', 'review')
             handleNavigate.toSignUp()
           }}
           onCancel={() => {
@@ -2578,8 +2580,9 @@ function App() {
             setContactForm(null)
           }}
           onSignIn={() => {
-            // Mark that we should return to checkout after login
+            // Mark that we should return to checkout review after login
             sessionStorage.setItem('return_to_checkout', 'true')
+            sessionStorage.setItem('return_to_checkout_step', 'review')
             handleNavigate.toLogin()
           }}
           onSignOut={async () => {
