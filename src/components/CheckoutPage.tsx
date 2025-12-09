@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckoutAccountPage } from './CheckoutAccountPage'
 import { CheckoutContactPage } from './CheckoutContactPage'
