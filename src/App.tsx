@@ -443,6 +443,35 @@ function App() {
     }
   }, [user, isLoading, location.pathname, navigate, checkoutStep])
 
+  // Handle return to checkout after login/signup (when redirected to home page)
+  useEffect(() => {
+    if (!isLoading && user && location.pathname === '/' && checkoutStep === null) {
+      const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
+      const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
+      
+      if (returnToCheckout) {
+        console.log('[App] User authenticated on home page, returning to checkout with pre-filled info')
+        sessionStorage.removeItem('return_to_checkout')
+        sessionStorage.removeItem('return_to_checkout_step')
+        
+        // Use user data directly from StackAuthProvider (already loaded, no API call needed)
+        // Pre-fill contact form with user's information
+        const contactFormData = {
+          email: user.email || '',
+          firstName: user.user_metadata?.firstName || '',
+          lastName: user.user_metadata?.lastName || '',
+          phone: user.phone || '',
+        }
+        
+        console.log('[App] Pre-filling checkout form with user data:', contactFormData)
+        setContactForm(contactFormData)
+        
+        // Go to the specified checkout step (usually 'review' when coming from account page)
+        setCheckoutStep(returnToCheckoutStep as 'account' | 'contact' | 'review')
+      }
+    }
+  }, [user, isLoading, location.pathname, checkoutStep])
+
   // Handle return from Square checkout - verify payment and load order data
   useEffect(() => {
     const orderId = searchParams.get('id')
