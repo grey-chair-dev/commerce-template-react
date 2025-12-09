@@ -822,6 +822,15 @@ async function processOrderUpdate(sql, event) {
         
         console.log(`✅ Created new order ${newOrderId} (Square: ${squareOrderId}) with ${extractedLineItems.length} items`);
         
+        // Send order confirmation email for new orders if payment is already approved
+        // Note: For most orders, payment comes later via payment.created webhook
+        // But if order is created with payment already approved, send confirmation now
+        if (orderStatus === 'In Progress' || orderStatus === 'Confirmed') {
+          sendOrderConfirmationEmail(sql, newOrderId).catch(err => {
+            console.error(`[Email] Failed to send confirmation email:`, err);
+          });
+        }
+        
         return { 
           orderId: newOrderId, 
           action: 'created', 
