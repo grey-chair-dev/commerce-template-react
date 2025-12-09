@@ -426,6 +426,11 @@ function App() {
               // Clear any payment error if order is confirmed (error code was false positive)
               setPaymentError(null)
               
+              // CRITICAL: Clear cart when order is confirmed
+              // This ensures the cart is cleared even if it wasn't cleared before redirecting to Square
+              console.log('[Checkout] Order confirmed - clearing cart')
+              clearCart()
+              
               // Set order confirmation - OrderConfirmationPage will fetch from endpoint itself
               // But we set minimal data for backward compatibility
               setOrderConfirmation({
@@ -475,7 +480,7 @@ function App() {
 
       verifyAndLoadOrder()
     }
-  }, [location.pathname, searchParams, orderConfirmation, navigate])
+  }, [location.pathname, searchParams, orderConfirmation, navigate, clearCart])
 
   // Navigation handlers using useNavigate
   const handleNavigate = {

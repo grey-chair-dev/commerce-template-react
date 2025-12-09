@@ -359,19 +359,35 @@ export function CartProvider({
 
   const removeFromCart = useCallback(
     (productId: string) => {
+      console.log('[Cart] removeFromCart called:', {
+        productId,
+        currentCartItems: cartItems.length,
+      })
+      
       setCartItems((prev) => {
         const updated = prev.filter((item) => item.id !== productId)
+        
+        console.log('[Cart] Removed item from cart:', {
+          productId,
+          beforeCount: prev.length,
+          afterCount: updated.length,
+        })
 
-        // P.4: Save to database if logged in
-        saveCartToDatabase(updated)
+        // P.4: Save to database if logged in (async, don't block UI)
+        if (user && user.id && !isCartSyncing) {
+          saveCartToDatabase(updated).catch((error) => {
+            console.error('[Cart] Failed to save cart after removal:', error)
+          })
+        }
 
         return updated
       })
     },
-    [saveCartToDatabase],
+    [saveCartToDatabase, user, isCartSyncing, cartItems.length],
   )
 
   const clearCart = useCallback(() => {
+    console.log('[Cart] clearCart called')
     setCartItems([])
     try {
       localStorage.removeItem(CART_STORAGE_KEY)
@@ -379,7 +395,15 @@ export function CartProvider({
     } catch (error) {
       console.error('[Cart] Failed to clear cart from localStorage:', error)
     }
-  }, [])
+    
+    // P.4: Save empty cart to database if logged in
+    if (user && user.id && !isCartSyncing) {
+      console.log('[Cart] Saving empty cart to database')
+      saveCartToDatabase([]).catch((error) => {
+        console.error('[Cart] Failed to clear cart in database:', error)
+      })
+    }
+  }, [user, isCartSyncing, saveCartToDatabase])
 
   const setCartItemsDirect = useCallback(
     (items: CartItem[]) => {
