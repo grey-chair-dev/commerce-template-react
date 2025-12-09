@@ -412,9 +412,12 @@ function App() {
     if (!isLoading && user && (location.pathname === '/login' || location.pathname === '/signup')) {
       // Check if we should return to checkout
       const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
+      const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
+      
       if (returnToCheckout) {
         console.log('[App] User authenticated, returning to checkout with pre-filled info')
         sessionStorage.removeItem('return_to_checkout')
+        sessionStorage.removeItem('return_to_checkout_step')
         
         // Use user data directly from StackAuthProvider (already loaded, no API call needed)
         // Pre-fill contact form with user's information
@@ -428,8 +431,8 @@ function App() {
         console.log('[App] Pre-filling checkout form with user data:', contactFormData)
         setContactForm(contactFormData)
         
-        // Go directly to review step (skip account and contact pages)
-        setCheckoutStep('review')
+        // Go to the specified checkout step (usually 'review' when coming from account page)
+        setCheckoutStep(returnToCheckoutStep as 'account' | 'contact' | 'review')
         
         // Close auth page by navigating to home (checkout will remain open)
         navigate('/')

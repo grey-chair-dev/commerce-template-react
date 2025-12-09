@@ -152,12 +152,9 @@ export function LoginPage({
       if (returnToCheckout) {
         // Don't call onBack - let App.tsx handle the redirect
         // The useEffect in App.tsx will detect the user and return to checkout
-        sessionStorage.removeItem('return_to_checkout')
-        if (window.location.hostname === 'localhost') {
-          window.location.href = '/'
-        } else {
-          window.location.reload()
-        }
+        // Use full page reload to ensure cookie is set and App.tsx can handle redirect
+        console.log('[Login] Returning to checkout after login')
+        window.location.href = '/'
         return
       }
       
