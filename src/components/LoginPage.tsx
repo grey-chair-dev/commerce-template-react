@@ -151,21 +151,15 @@ export function LoginPage({
       
       // Check if we should return to checkout
       const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
+      const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
+      
       if (returnToCheckout) {
         console.log('[Login] Returning to checkout after login')
         sessionStorage.removeItem('return_to_checkout')
+        sessionStorage.removeItem('return_to_checkout_step')
         
-        // If callback is provided, use it to directly open checkout
-        // Otherwise, navigate to home and let useEffect handle it
-        if (onReturnToCheckout) {
-          onReturnToCheckout()
-          // Close login page by navigating to home
-          navigate('/')
-          return
-        }
-        
-        // Fallback: navigate to home and let useEffect handle checkout
-        window.location.href = '/'
+        // Navigate directly to checkout at the specified step
+        navigate(`/checkout?step=${returnToCheckoutStep}`)
         return
       }
       

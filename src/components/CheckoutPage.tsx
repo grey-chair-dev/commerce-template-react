@@ -1,0 +1,262 @@
+import { useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CheckoutAccountPage } from './CheckoutAccountPage'
+import { CheckoutContactPage } from './CheckoutContactPage'
+import { CheckoutReviewPage } from './CheckoutReviewPage'
+import type { Product } from '../dataAdapter'
+import type { ContactForm } from '../utils/checkoutPayload'
+import type { User } from '@neondatabase/neon-auth'
+
+type CheckoutPageProps = {
+  cartItems: Array<Product & { quantity: number }>
+  contactForm: ContactForm | null
+  cartSubtotal: number
+  estimatedTax: number
+  user?: User | null
+  isLoading?: boolean
+  cartCount?: number
+  wishlistCount?: number
+  wishlistFeatureEnabled?: boolean
+  products?: Product[]
+  orderTrackingEnabled?: boolean
+  onSetContactForm: (form: ContactForm) => void
+  onComplete: (payload?: any) => void
+  onCancel: () => void
+  onSignIn: () => void
+  onSignUp: () => void
+  onSignOut?: () => void
+  onAccount?: () => void
+  onCart?: () => void
+  onWishlist?: () => void
+  onSearch?: () => void
+  onProductSelect?: (product: Product) => void
+  onTrackOrder?: () => void
+  onContactUs?: () => void
+  onAboutUs?: () => void
+  onShippingReturns?: () => void
+  onPrivacyPolicy?: () => void
+  onTermsOfService?: () => void
+}
+
+export function CheckoutPage({
+  cartItems,
+  contactForm,
+  cartSubtotal,
+  estimatedTax,
+  user,
+  isLoading = false,
+  cartCount = 0,
+  wishlistCount = 0,
+  wishlistFeatureEnabled = false,
+  products = [],
+  orderTrackingEnabled = false,
+  onSetContactForm,
+  onComplete,
+  onCancel,
+  onSignIn,
+  onSignUp,
+  onSignOut,
+  onAccount,
+  onCart,
+  onWishlist,
+  onSearch,
+  onProductSelect,
+  onTrackOrder,
+  onContactUs,
+  onAboutUs,
+  onShippingReturns,
+  onPrivacyPolicy,
+  onTermsOfService,
+}: CheckoutPageProps) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const step = searchParams.get('step') || 'account'
+
+  // Redirect to account step if cart is empty
+  useEffect(() => {
+    if (cartItems.length === 0 && step !== 'account') {
+      navigate('/checkout?step=account', { replace: true })
+    }
+  }, [cartItems.length, step, navigate])
+
+  // If user is logged in and on account step, redirect to review
+  useEffect(() => {
+    if (user && !isLoading && step === 'account') {
+      // Pre-fill contact form with user data
+      const contactFormData = {
+        email: user.email || '',
+        firstName: user.user_metadata?.firstName || '',
+        lastName: user.user_metadata?.lastName || '',
+        phone: user.phone || '',
+      }
+      onSetContactForm(contactFormData)
+      navigate('/checkout?step=review', { replace: true })
+    }
+  }, [user, isLoading, step, navigate, onSetContactForm])
+
+  // Handle step navigation
+  const goToStep = (newStep: 'account' | 'contact' | 'review') => {
+    navigate(`/checkout?step=${newStep}`)
+  }
+
+  // Render appropriate step
+  if (step === 'account') {
+    return (
+      <CheckoutAccountPage
+        cartSubtotal={cartSubtotal}
+        estimatedTax={estimatedTax}
+        user={user}
+        isLoading={isLoading}
+        cartCount={cartCount}
+        wishlistCount={wishlistCount}
+        wishlistFeatureEnabled={wishlistFeatureEnabled}
+        products={products}
+        orderTrackingEnabled={orderTrackingEnabled}
+        onContinueAsGuest={() => goToStep('contact')}
+        onRedirectToReview={async () => {
+          if (user) {
+            try {
+              const response = await fetch('/api/auth/me', {
+                method: 'GET',
+                credentials: 'include',
+              })
+              const data = await response.json()
+              if (data?.success && data.customer) {
+                onSetContactForm({
+                  email: data.customer.email,
+                  firstName: data.customer.firstName,
+                  lastName: data.customer.lastName,
+                  phone: data.customer.phone || '',
+                })
+                goToStep('review')
+              }
+            } catch (error) {
+              console.error('[CheckoutPage] Failed to fetch user data:', error)
+            }
+          }
+        }}
+        onSignIn={() => {
+          sessionStorage.setItem('return_to_checkout', 'true')
+          sessionStorage.setItem('return_to_checkout_step', 'review')
+          onSignIn()
+        }}
+        onSignUp={() => {
+          sessionStorage.setItem('return_to_checkout', 'true')
+          sessionStorage.setItem('return_to_checkout_step', 'review')
+          onSignUp()
+        }}
+        onCancel={onCancel}
+        onSignOut={onSignOut}
+        onAccount={onAccount}
+        onCart={onCart}
+        onWishlist={onWishlist}
+        onSearch={onSearch}
+        onProductSelect={onProductSelect}
+        onTrackOrder={onTrackOrder}
+        onContactUs={onContactUs}
+        onAboutUs={onAboutUs}
+        onShippingReturns={onShippingReturns}
+        onPrivacyPolicy={onPrivacyPolicy}
+        onTermsOfService={onTermsOfService}
+      />
+    )
+  }
+
+  if (step === 'contact') {
+    return (
+      <CheckoutContactPage
+        cartSubtotal={cartSubtotal}
+        estimatedTax={estimatedTax}
+        user={user}
+        isLoading={isLoading}
+        cartCount={cartCount}
+        wishlistCount={wishlistCount}
+        wishlistFeatureEnabled={wishlistFeatureEnabled}
+        products={products}
+        orderTrackingEnabled={orderTrackingEnabled}
+        onNext={(form) => {
+          onSetContactForm(form)
+          goToStep('review')
+        }}
+        onCancel={() => {
+          goToStep('account')
+          onSetContactForm(null)
+        }}
+        onSignIn={() => {
+          sessionStorage.setItem('return_to_checkout', 'true')
+          sessionStorage.setItem('return_to_checkout_step', 'review')
+          onSignIn()
+        }}
+        onSignOut={onSignOut}
+        onAccount={onAccount}
+        onCart={onCart}
+        onWishlist={onWishlist}
+        onSearch={onSearch}
+        onProductSelect={onProductSelect}
+        onTrackOrder={onTrackOrder}
+        onContactUs={onContactUs}
+        onAboutUs={onAboutUs}
+        onShippingReturns={onShippingReturns}
+        onPrivacyPolicy={onPrivacyPolicy}
+        onTermsOfService={onTermsOfService}
+      />
+    )
+  }
+
+  if (step === 'review' && contactForm) {
+    return (
+      <CheckoutReviewPage
+        cartItems={cartItems}
+        contactForm={contactForm}
+        paymentForm={null}
+        cartSubtotal={cartSubtotal}
+        estimatedTax={estimatedTax}
+        customerId={user?.id || null}
+        user={user}
+        isLoading={isLoading}
+        cartCount={cartCount}
+        wishlistCount={wishlistCount}
+        wishlistFeatureEnabled={wishlistFeatureEnabled}
+        products={products}
+        orderTrackingEnabled={orderTrackingEnabled}
+        onBack={() => {
+          if (user) {
+            goToStep('account')
+          } else {
+            goToStep('contact')
+          }
+        }}
+        onComplete={onComplete}
+        onCancel={onCancel}
+        onSignIn={onSignIn}
+        onSignOut={onSignOut}
+        onAccount={onAccount}
+        onCart={onCart}
+        onWishlist={onWishlist}
+        onSearch={onSearch}
+        onProductSelect={onProductSelect}
+        onTrackOrder={onTrackOrder}
+        onContactUs={onContactUs}
+        onAboutUs={onAboutUs}
+        onShippingReturns={onShippingReturns}
+        onPrivacyPolicy={onPrivacyPolicy}
+        onTermsOfService={onTermsOfService}
+      />
+    )
+  }
+
+  // If review step but no contact form, redirect to account
+  if (step === 'review' && !contactForm) {
+    useEffect(() => {
+      navigate('/checkout?step=account', { replace: true })
+    }, [])
+    return null
+  }
+
+  // Default: redirect to account
+  useEffect(() => {
+    navigate('/checkout?step=account', { replace: true })
+  }, [])
+  return null
+}
+

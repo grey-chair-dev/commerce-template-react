@@ -16,6 +16,7 @@ import { ProductDetailPage } from './components/ProductDetailPage'
 import { CheckoutAccountPage } from './components/CheckoutAccountPage'
 import { CheckoutContactPage } from './components/CheckoutContactPage'
 import { CheckoutReviewPage } from './components/CheckoutReviewPage'
+import { CheckoutPage } from './components/CheckoutPage'
 import { OrderConfirmationPage } from './components/OrderConfirmationPage'
 import { OrderStatusPage } from './components/OrderStatusPage'
 import { OrderLookupPage } from './components/OrderLookupPage'
@@ -431,11 +432,8 @@ function App() {
         console.log('[App] Pre-filling checkout form with user data:', contactFormData)
         setContactForm(contactFormData)
         
-        // Go to the specified checkout step (usually 'review' when coming from account page)
-        setCheckoutStep(returnToCheckoutStep as 'account' | 'contact' | 'review')
-        
-        // Close auth page by navigating to home (checkout will remain open)
-        navigate('/')
+        // Navigate to checkout at the specified step
+        navigate(`/checkout?step=${returnToCheckoutStep}`)
       } else {
         console.log('[App] User is authenticated, redirecting from', location.pathname, 'to profile')
         navigate('/profile')
@@ -1349,7 +1347,7 @@ function App() {
               onSignOut={() => signOut()}
               onAccount={handleNavigate.toDashboard}
               onReturnToCheckout={() => {
-                // Directly open checkout at review step with user data
+                // Navigate to checkout at review step
                 const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
                 sessionStorage.removeItem('return_to_checkout_step')
                 
@@ -1360,10 +1358,98 @@ function App() {
                   phone: user?.phone || '',
                 }
                 
-                console.log('[App] Opening checkout directly after login:', contactFormData)
+                console.log('[App] Navigating to checkout after login:', contactFormData)
                 setContactForm(contactFormData)
-                setCheckoutStep(returnToCheckoutStep as 'account' | 'contact' | 'review')
+                navigate(`/checkout?step=${returnToCheckoutStep}`)
               }}
+            />
+          }
+        />
+
+        {/* Checkout Route */}
+        <Route
+          path="/checkout"
+          element={
+            <CheckoutPage
+              cartItems={cartItems}
+              contactForm={contactForm}
+              cartSubtotal={cartSubtotal}
+              estimatedTax={estimatedTax}
+              user={user}
+              isLoading={isLoading}
+              cartCount={cartCount}
+              wishlistCount={wishlistCount}
+              wishlistFeatureEnabled={wishlistFeatureEnabled}
+              products={products}
+              orderTrackingEnabled={featureFlags.enableOrderTracking}
+              onSetContactForm={setContactForm}
+              onComplete={async (checkoutPayload) => {
+                if (!checkoutPayload) {
+                  console.error('[Checkout] No payload provided')
+                  alert('Checkout failed. Please try again.')
+                  return
+                }
+
+                setIsProcessing(true)
+
+                try {
+                  const isLocalDev =
+                    typeof window !== 'undefined' &&
+                    (window.location.hostname === 'localhost' ||
+                      window.location.hostname === '127.0.0.1')
+                  const apiBaseUrl = isLocalDev
+                    ? 'http://localhost:3000'
+                    : typeof window !== 'undefined'
+                      ? window.location.origin
+                      : ''
+
+                  const response = await fetch(`${apiBaseUrl}/api/checkout/create`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(checkoutPayload),
+                  })
+
+                  const data = await response.json()
+
+                  if (!response.ok) {
+                    throw new Error(data.error || 'Checkout failed')
+                  }
+
+                  if (data.url) {
+                    window.location.href = data.url
+                  } else {
+                    throw new Error('No checkout URL received')
+                  }
+                } catch (error) {
+                  console.error('[Checkout] Error:', error)
+                  alert(`Checkout failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+                  setIsProcessing(false)
+                }
+              }}
+              onCancel={() => {
+                navigate('/')
+                setContactForm(null)
+              }}
+              onSignIn={() => navigate('/login')}
+              onSignUp={() => navigate('/signup')}
+              onSignOut={() => signOut()}
+              onAccount={handleNavigate.toDashboard}
+              onCart={() => setCartOpen(true)}
+              onWishlist={() => setWishlistOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+              onProductSelect={(product) => {
+                setPdpProduct(product)
+                navigate(`/product/${product.id}`)
+              }}
+              onTrackOrder={handleNavigate.toTrackOrder}
+              onContactUs={handleNavigate.toContact}
+              onAboutUs={handleNavigate.toAbout}
+              onShippingReturns={handleNavigate.toShippingReturns}
+              onPrivacyPolicy={handleNavigate.toPrivacy}
+              onTermsOfService={handleNavigate.toTerms}
             />
           }
         />
@@ -2311,13 +2397,10 @@ function App() {
                         
                         console.log('[Checkout] User has complete info, skipping to review')
                         
-                        // Set form first, then step, then close cart
+                        // Set form first, then navigate to checkout review
                         setContactForm(contactFormData)
-                        // Use setTimeout to ensure state updates in correct order
-                        setTimeout(() => {
-                          setCheckoutStep('review')
-                          setCartOpen(false)
-                        }, 0)
+                        setCartOpen(false)
+                        navigate('/checkout?step=review')
                         return
                       } else {
                         console.log('[Checkout] Missing required info, will show contact page')
@@ -2329,8 +2412,8 @@ function App() {
                           phone: customerPhone,
                         }
                         setContactForm(contactFormData)
-                        setCheckoutStep('contact')
-                        setTimeout(() => setCartOpen(false), 0)
+                        setCartOpen(false)
+                        navigate('/checkout?step=contact')
                         return
                       }
                     } else {
@@ -2339,9 +2422,8 @@ function App() {
                     
                     // Default: show account selection page
                     console.log('[Checkout] Showing account selection page')
-                    setCheckoutStep('account')
-                    // Close cart after a tiny delay to ensure checkout is visible first
-                    setTimeout(() => setCartOpen(false), 0)
+                    setCartOpen(false)
+                    navigate('/checkout?step=account')
                   }}
                   disabled={cartItems.length === 0}
                 >
@@ -2604,7 +2686,8 @@ function App() {
         />
       ) : null}
 
-      {checkoutStep === 'contact' ? (
+      {/* Checkout is now handled by /checkout route - keeping this for backward compatibility during transition */}
+      {false && checkoutStep === 'contact' ? (
         <CheckoutContactPage
           cartSubtotal={cartSubtotal}
           estimatedTax={estimatedTax}
@@ -2648,7 +2731,8 @@ function App() {
         />
       ) : null}
 
-      {checkoutStep === 'review' && contactForm ? (
+      {/* Checkout is now handled by /checkout route - keeping this for backward compatibility during transition */}
+      {false && checkoutStep === 'review' && contactForm ? (
         <CheckoutReviewPage
           cartItems={cartItems}
           contactForm={contactForm}
