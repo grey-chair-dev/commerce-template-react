@@ -623,9 +623,11 @@ async function processOrderUpdate(sql, event) {
         }
       } else {
         console.log(`[Webhook] Status unchanged: "${currentStatus}" (fulfillment state: ${fulfillmentState || 'not found'})`);
-        console.log(`[Webhook] No update needed - status and fulfillment state are the same`);
+        console.log(`[Webhook] Status unchanged, but will still update order data (amounts, line items) if needed`);
       }
       
+      // Always update order data (amounts, line items) even if status hasn't changed
+      // This ensures we sync complete data from Square API when webhook payload was sparse
       try {
         // Neon serverless doesn't support transactions, so we do updates sequentially
         // Update order record
