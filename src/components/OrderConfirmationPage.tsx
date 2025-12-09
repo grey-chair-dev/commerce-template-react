@@ -230,6 +230,19 @@ export function OrderConfirmationPage({
 
         const data = await response.json()
         
+        // Validate response data
+        if (!data || !data.order_number) {
+          setError('Invalid order data received from server.')
+          setLoading(false)
+          return
+        }
+        
+        // Ensure items is an array
+        if (!Array.isArray(data.items)) {
+          console.warn('[Order Confirmation] Order items is not an array, defaulting to empty array')
+          data.items = []
+        }
+        
         // Check if order status indicates payment failure
         if (data.status === 'cancelled' || data.status === 'failed') {
           setError('Payment was declined. Your order was not processed. Please try again with a different payment method.')
