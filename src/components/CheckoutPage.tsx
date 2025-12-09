@@ -249,14 +249,18 @@ export function CheckoutPage({
   if (step === 'review' && !contactForm) {
     useEffect(() => {
       navigate('/checkout?step=account', { replace: true })
-    }, [])
+    }, [navigate])
     return null
   }
 
-  // Default: redirect to account
-  useEffect(() => {
-    navigate('/checkout?step=account', { replace: true })
-  }, [])
+  // Default: redirect to account for invalid steps
+  if (step !== 'account' && step !== 'contact' && step !== 'review') {
+    useEffect(() => {
+      navigate('/checkout?step=account', { replace: true })
+    }, [navigate])
+    return null
+  }
+  
   return null
 }
 
