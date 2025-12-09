@@ -1348,6 +1348,22 @@ function App() {
               onTermsOfService={handleNavigate.toTerms}
               onSignOut={() => signOut()}
               onAccount={handleNavigate.toDashboard}
+              onReturnToCheckout={() => {
+                // Directly open checkout at review step with user data
+                const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
+                sessionStorage.removeItem('return_to_checkout_step')
+                
+                const contactFormData = {
+                  email: user?.email || '',
+                  firstName: user?.user_metadata?.firstName || '',
+                  lastName: user?.user_metadata?.lastName || '',
+                  phone: user?.phone || '',
+                }
+                
+                console.log('[App] Opening checkout directly after login:', contactFormData)
+                setContactForm(contactFormData)
+                setCheckoutStep(returnToCheckoutStep as 'account' | 'contact' | 'review')
+              }}
             />
           }
         />
@@ -2884,6 +2900,23 @@ function App() {
           onTermsOfService={handleNavigate.toTerms}
           onSignOut={() => signOut()}
           onAccount={handleNavigate.toDashboard}
+          onReturnToCheckout={() => {
+            // Directly open checkout at review step with user data
+            const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
+            sessionStorage.removeItem('return_to_checkout_step')
+            
+            const contactFormData = {
+              email: user?.email || '',
+              firstName: user?.user_metadata?.firstName || '',
+              lastName: user?.user_metadata?.lastName || '',
+              phone: user?.phone || '',
+            }
+            
+            console.log('[App] Opening checkout directly after login:', contactFormData)
+            setContactForm(contactFormData)
+            setCheckoutStep(returnToCheckoutStep as 'account' | 'contact' | 'review')
+            setAuthPage(null) // Close login modal
+          }}
         />
       ) : null}
 
