@@ -182,6 +182,7 @@ export function CheckoutPage({
 
   // Handle step navigation
   const goToStep = (newStep: 'account' | 'contact' | 'review') => {
+    setIsTransitioning(true)
     navigate(`/checkout?step=${newStep}`)
   }
 
