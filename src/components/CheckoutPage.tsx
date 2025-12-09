@@ -90,18 +90,28 @@ export function CheckoutPage({
         phone: user.phone || '',
       }
       onSetContactForm(contactFormData)
-      // Use setTimeout to ensure contact form is set before navigation
-      setTimeout(() => {
-        navigate('/checkout?step=review', { replace: true })
-      }, 0)
+      navigate('/checkout?step=review', { replace: true })
     }
   }, [user, isLoading, step, navigate, onSetContactForm])
 
   // If review step but no contact form, redirect to account
-  // BUT: Don't redirect if user is logged in (they might be in the process of setting contact form)
+  // BUT: Don't redirect if user is logged in (contact form should be set by the account->review redirect)
+  // Give a small delay to allow contact form to be set
   useEffect(() => {
-    if (step === 'review' && !contactForm && (!user || isLoading)) {
-      navigate('/checkout?step=account', { replace: true })
+    if (step === 'review' && !contactForm) {
+      // If user is logged in, wait a bit for contact form to be set
+      if (user && !isLoading) {
+        const timer = setTimeout(() => {
+          // If contact form still not set after delay, redirect to account
+          if (!contactForm) {
+            navigate('/checkout?step=account', { replace: true })
+          }
+        }, 100)
+        return () => clearTimeout(timer)
+      } else {
+        // Guest user or still loading - redirect immediately
+        navigate('/checkout?step=account', { replace: true })
+      }
     }
   }, [step, contactForm, navigate, user, isLoading])
 
