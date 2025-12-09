@@ -135,31 +135,20 @@ export function SignUpPage({
       console.log('[SignUp] Registration successful:', data)
       setIsSubmitting(false)
       
-      // For localhost development with cross-port cookies, redirect to profile
-      // This ensures the cookie is properly available for subsequent requests
-      if (window.location.hostname === 'localhost') {
-        console.log('[SignUp] Redirecting to profile page...')
-        // Navigate to profile page
-        window.location.href = '/profile'
+      // Check if we should return to checkout (user was in checkout flow)
+      const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
+      if (returnToCheckout) {
+        console.log('[SignUp] User was in checkout, will return to checkout after auth')
+        sessionStorage.removeItem('return_to_checkout')
+        // Use full page reload to ensure cookie is picked up and App.tsx can handle redirect
+        window.location.href = '/'
         return
       }
       
-      // Small delay to ensure cookie is set before checking auth
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // Refresh auth state to recognize the new user
-      try {
-        await refreshAuth()
-        console.log('[SignUp] Auth state refreshed successfully')
-      } catch (refreshError) {
-        console.error('[SignUp] Failed to refresh auth, reloading page:', refreshError)
-        // If refresh fails, reload the page to ensure cookie is picked up
-        window.location.reload()
-        return
-      }
-      
-      // Redirect to profile page after successful sign up
-      navigate('/profile')
+      // Always redirect to profile page after successful sign up
+      // Use full page reload to ensure cookie is properly set and auth state is refreshed
+      console.log('[SignUp] Redirecting to profile page...')
+      window.location.href = '/profile'
     } catch (err) {
       console.error('Sign up error:', err)
       setError('Network error. Please check your connection and try again.')
