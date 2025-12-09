@@ -78,6 +78,42 @@ function verifySquareSignature(signature, body, signatureKey) {
 }
 
 /**
+ * Fetch full order details from Square API
+ * This ensures we always have complete data (line items, amounts, fulfillments)
+ * even when the webhook payload is sparse
+ */
+async function fetchFullOrderFromSquare(squareOrderId) {
+  try {
+    const squareAccessToken = process.env.SQUARE_ACCESS_TOKEN?.trim();
+    const squareEnvironment = (process.env.SQUARE_ENVIRONMENT || 'sandbox').toLowerCase().trim();
+    
+    if (!squareAccessToken) {
+      console.warn(`[Webhook] SQUARE_ACCESS_TOKEN not configured - cannot fetch full order details`);
+      return null;
+    }
+    
+    const squareClient = new SquareClient({
+      accessToken: squareAccessToken,
+      environment: squareEnvironment === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    });
+    
+    // Fetch full order from Square
+    const orderResponse = await squareClient.orders.retrieveOrder(squareOrderId);
+    
+    if (orderResponse.result && orderResponse.result.order) {
+      console.log(`[Webhook] ✅ Fetched full order from Square API`);
+      return orderResponse.result.order;
+    } else {
+      console.warn(`[Webhook] Could not fetch full order from Square API`);
+      return null;
+    }
+  } catch (fetchError) {
+    console.error(`[Webhook] Error fetching full order from Square:`, fetchError.message);
+    return null;
+  }
+}
+
+/**
  * Process order.updated event
  */
 async function processOrderUpdate(sql, event) {
@@ -373,6 +409,112 @@ async function processOrderUpdate(sql, event) {
     });
     
     console.log(`[Webhook] Extracted ${extractedLineItems.length} line items from order ${squareOrderId}`);
+    
+    // Check if webhook payload is sparse (missing critical data)
+    // Square sometimes sends minimal payloads with only status changes
+    const isPayloadSparse = extractedLineItems.length === 0 || totalAmount === 0 || !orderObject?.line_items;
+    
+    if (isPayloadSparse) {
+      console.warn(`[Webhook] ⚠️  Webhook payload is sparse (${extractedLineItems.length} items, $${totalAmount} total)`);
+      console.warn(`[Webhook] Fetching full order details from Square API to ensure complete data...`);
+      
+      const fullOrder = await fetchFullOrderFromSquare(squareOrderId);
+      
+      if (fullOrder) {
+        // Replace sparse webhook data with complete Square API data
+        orderObject = fullOrder;
+        
+        // Re-extract all data from full order
+        orderState = fullOrder.state || orderState;
+        version = fullOrder.version || version;
+        
+        // Re-extract line items
+        const fullLineItems = fullOrder.lineItems || fullOrder.line_items || [];
+        extractedLineItems = fullLineItems.map((item, index) => {
+          const basePriceMoney = item.basePriceMoney || item.base_price_money || {};
+          const basePrice = basePriceMoney.amount ? Number(basePriceMoney.amount) / 100 : 0;
+          
+          const grossSalesMoney = item.grossSalesMoney || item.gross_sales_money || {};
+          const grossSales = grossSalesMoney.amount ? Number(grossSalesMoney.amount) / 100 : 0;
+          
+          const totalMoney = item.totalMoney || item.total_money || {};
+          const total = totalMoney.amount ? Number(totalMoney.amount) / 100 : 0;
+          
+          return {
+            uid: item.uid || `item-${index}`,
+            catalog_object_id: item.catalogObjectId || item.catalog_object_id || null,
+            catalog_version: item.catalogVersion || item.catalog_version || null,
+            name: item.name || 'Unknown Item',
+            quantity: item.quantity || '1',
+            item_type: item.itemType || item.item_type || 'ITEM',
+            base_price: basePrice,
+            gross_sales: grossSales,
+            total: total,
+            variation_name: item.variationName || item.variation_name || null,
+          };
+        });
+        
+        // Re-extract amounts
+        const fullNetAmounts = fullOrder.netAmounts || fullOrder.net_amounts || {};
+        const fullTotalMoney = fullNetAmounts.totalMoney || fullNetAmounts.total_money || {};
+        totalAmount = fullTotalMoney.amount ? Number(fullTotalMoney.amount) / 100 : 0;
+        
+        const fullSubtotalMoney = fullNetAmounts.subtotalMoney || fullNetAmounts.subtotal_money || fullTotalMoney || {};
+        subtotalAmount = fullSubtotalMoney.amount ? Number(fullSubtotalMoney.amount) / 100 : 0;
+        
+        const fullTaxMoney = fullNetAmounts.taxMoney || fullNetAmounts.tax_money || {};
+        taxAmount = fullTaxMoney.amount ? Number(fullTaxMoney.amount) / 100 : 0;
+        
+        const fullShippingMoney = fullNetAmounts.shippingMoney || fullNetAmounts.shipping_money || {};
+        shippingAmount = fullShippingMoney.amount ? Number(fullShippingMoney.amount) / 100 : 0;
+        
+        // Re-extract fulfillments
+        const fullFulfillments = fullOrder.fulfillments || [];
+        fulfillments = fullFulfillments;
+        
+        // Re-extract fulfillment state
+        if (fullFulfillments.length > 0) {
+          const firstFulfillment = fullFulfillments[0];
+          fulfillmentState = firstFulfillment.state || firstFulfillment.fulfillmentState || null;
+          if (fulfillmentState) {
+            fulfillmentState = String(fulfillmentState).toUpperCase();
+          }
+          
+          // Re-map status based on fulfillment state
+          if (fulfillmentState) {
+            const fulfillmentStatusMap = {
+              'PROPOSED': 'In Progress',
+              'RESERVED': 'In Progress',
+              'PREPARED': 'Ready',
+              'COMPLETED': 'Picked Up',
+              'CANCELED': 'Canceled',
+              'CANCELLED': 'Canceled',
+            };
+            orderStatus = fulfillmentStatusMap[fulfillmentState] || orderStatus;
+          }
+        }
+        
+        // Re-extract pickup details
+        const fullPickupFulfillment = fullFulfillments.find(f => f.type === 'PICKUP' || f.fulfillmentType === 'PICKUP');
+        if (fullPickupFulfillment) {
+          const fullPickupDetailsData = fullPickupFulfillment.pickupDetails || fullPickupFulfillment.pickup_details;
+          if (fullPickupDetailsData) {
+            const fullRecipient = fullPickupDetailsData.recipient || {};
+            pickupDetails = {
+              firstName: fullRecipient.displayName?.split(' ')[0] || customerFirstName || '',
+              lastName: fullRecipient.displayName?.split(' ').slice(1).join(' ') || customerLastName || '',
+              email: fullRecipient.emailAddress || customerEmail || '',
+              phone: fullRecipient.phoneNumber || customerPhone || '',
+              fulfillmentType: 'PICKUP',
+            };
+          }
+        }
+        
+        console.log(`[Webhook] ✅ Re-extracted from full order: ${extractedLineItems.length} items, $${totalAmount} total`);
+      } else {
+        console.warn(`[Webhook] ⚠️  Could not fetch full order - using sparse webhook data`);
+      }
+    }
     
     // 3.7 Extract pickup details from fulfillments (for pickup orders)
     // Log required pickup details: customer name, email, fulfillment type
