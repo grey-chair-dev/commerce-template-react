@@ -162,12 +162,8 @@ async function processOrderUpdate(sql, event) {
       version = orderObject.version || 0;
     }
     
-    // Log the full order object structure for debugging
-    console.log(`[Webhook] ========== ORDER UPDATE WEBHOOK ==========`);
-    console.log(`[Webhook] Square Order ID: ${squareOrderId}`);
-    console.log(`[Webhook] Order state: ${orderState}, Version: ${version}`);
-    console.log(`[Webhook] Order object keys:`, Object.keys(orderObject || {}));
-    console.log(`[Webhook] Full order object (first 3000 chars):`, JSON.stringify(orderObject, null, 2).substring(0, 3000));
+    // Log order update (condensed)
+    console.log(`[Webhook] Order update: ${squareOrderId} | State: ${orderState} | Version: ${version}`);
     
     // Check if order already exists
     const existingOrder = await sql`
