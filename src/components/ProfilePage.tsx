@@ -273,7 +273,7 @@ export function ProfilePage({
 
   if (isLoadingProfile) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
+      <div className="min-h-screen bg-surface text-white">
         <Header
           user={user}
           isLoading={isLoading}
@@ -306,7 +306,7 @@ export function ProfilePage({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-surface text-white">
+    <div className="min-h-screen bg-surface text-white">
       <Header
         user={user}
         isLoading={isLoading}
