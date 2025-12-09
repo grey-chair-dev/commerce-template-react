@@ -259,16 +259,19 @@ export default async function handler(req, res) {
       pickup_status: pickupStatus,
       
       // Order items (from order_items table JOIN with products)
-      items: itemsResult.map(item => ({
-        id: item.id,
-        product_id: item.product_id,
-        product_name: item.product_name || 'Product',
-        quantity: item.quantity,
-        price: parseFloat(item.price || 0),
-        subtotal: parseFloat(item.subtotal || 0),
-        image_url: item.image_url || '',
-        category: item.category || '',
-      })),
+      // Ensure items is always an array (even if empty)
+      items: Array.isArray(itemsResult) && itemsResult.length > 0
+        ? itemsResult.map(item => ({
+            id: item.id,
+            product_id: item.product_id,
+            product_name: item.product_name || 'Product',
+            quantity: item.quantity || 0,
+            price: parseFloat(item.price || 0),
+            subtotal: parseFloat(item.subtotal || 0),
+            image_url: item.image_url || '',
+            category: item.category || '',
+          }))
+        : [],
       
       // Payment information
       payment_method: order.payment_method,
