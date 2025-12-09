@@ -81,6 +81,7 @@ export function CheckoutPage({
   useEffect(() => {
     if (cartItems.length === 0 && step !== 'account' && !redirectingRef.current) {
       redirectingRef.current = true
+      setIsTransitioning(true)
       navigate('/checkout?step=account', { replace: true })
       setTimeout(() => {
         redirectingRef.current = false
@@ -93,6 +94,7 @@ export function CheckoutPage({
     if (user && !isLoading && step === 'account' && !redirectingRef.current) {
       redirectingRef.current = true
       hasSetContactFormRef.current = true
+      setIsTransitioning(true)
       // Pre-fill contact form with user data
       const contactFormData = {
         email: user.email || '',
@@ -126,23 +128,10 @@ export function CheckoutPage({
       // Hide loading after a short delay to allow component to render
       const timer = setTimeout(() => {
         setIsTransitioning(false)
-      }, 300)
+      }, 400)
       return () => clearTimeout(timer)
     }
   }, [step])
-
-  // Show loading state during redirects
-  useEffect(() => {
-    if (redirectingRef.current) {
-      setIsTransitioning(true)
-    } else {
-      // Small delay before hiding to ensure smooth transition
-      const timer = setTimeout(() => {
-        setIsTransitioning(false)
-      }, 200)
-      return () => clearTimeout(timer)
-    }
-  }, [redirectingRef.current])
 
   // If review step but no contact form, redirect to account
   // BUT: Don't redirect if we just set the contact form for a logged-in user
@@ -155,6 +144,7 @@ export function CheckoutPage({
           if (!contactForm && !redirectingRef.current) {
             redirectingRef.current = true
             hasSetContactFormRef.current = false
+            setIsTransitioning(true)
             navigate('/checkout?step=account', { replace: true })
             setTimeout(() => {
               redirectingRef.current = false
@@ -165,6 +155,7 @@ export function CheckoutPage({
       } else if (!user || isLoading) {
         // Guest user or still loading - redirect immediately
         redirectingRef.current = true
+        setIsTransitioning(true)
         navigate('/checkout?step=account', { replace: true })
         setTimeout(() => {
           redirectingRef.current = false
