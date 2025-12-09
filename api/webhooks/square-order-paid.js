@@ -1341,9 +1341,8 @@ export default async function handler(req, res) {
     
     // Log which signature key source is being used (without exposing the key)
     if (signatureKey) {
-      console.log(`[Webhook] Signature key found: ${process.env.ORDER_WEBHOOK_SIGNATURE_KEY ? 'ORDER_WEBHOOK_SIGNATURE_KEY' : process.env.SQUARE_SIGNATURE_KEY ? 'SQUARE_SIGNATURE_KEY' : 'SQUARE_WEBHOOK_SIGNATURE_KEY'}`);
-      console.log(`[Webhook] Signature key length: ${signatureKey.length} characters`);
-      console.log(`[Webhook] Signature key preview: ${signatureKey.substring(0, 4)}...${signatureKey.substring(signatureKey.length - 4)}`);
+      const keySource = process.env.ORDER_WEBHOOK_SIGNATURE_KEY ? 'ORDER_WEBHOOK_SIGNATURE_KEY' : process.env.SQUARE_SIGNATURE_KEY ? 'SQUARE_SIGNATURE_KEY' : 'SQUARE_WEBHOOK_SIGNATURE_KEY';
+      console.log(`[Webhook] Signature key: ${keySource} (${signatureKey.length} chars)`);
     } else {
       console.error('Order webhook signature key not configured');
       console.error('Set ORDER_WEBHOOK_SIGNATURE_KEY in Vercel environment variables');
