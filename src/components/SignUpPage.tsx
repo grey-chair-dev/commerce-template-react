@@ -82,50 +82,27 @@ export function SignUpPage({
         phone: phone.trim()
       })
 
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Important: include cookies
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          phone: phone.trim() || null,
-        }),
-      })
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.register(
+        email.trim(),
+        password,
+        firstName.trim() && lastName.trim() ? `${firstName.trim()} ${lastName.trim()}` : undefined
+      )
 
-      let data
-      try {
-        const text = await response.text()
-        console.log('[SignUp] Response status:', response.status, 'Response text:', text)
-        if (text) {
-          data = JSON.parse(text)
-        }
-      } catch (parseError) {
-        console.error('[SignUp] Failed to parse response:', parseError)
-        setError('Invalid response from server. Please try again.')
-        setIsSubmitting(false)
-        return
-      }
-
-      if (!response.ok) {
-        console.error('[SignUp] Registration failed:', data)
+      if (response.error) {
+        console.error('[SignUp] Registration failed:', response.error)
         // Handle validation errors
-        if (data) {
-          if (data.details) {
-            if (Array.isArray(data.details)) {
-              setError(data.details.join(', '))
-            } else {
-              setError(data.details)
-            }
+        if (response.error.details) {
+          const details = response.error.details as any
+          if (Array.isArray(details)) {
+            setError(details.join(', '))
+          } else if (typeof details === 'string') {
+            setError(details)
           } else {
-            setError(data.error || 'Failed to create account. Please try again.')
+            setError(response.error.message || 'Failed to create account. Please try again.')
           }
         } else {
-          setError(`Server error (${response.status}). Please try again.`)
+          setError(response.error.message || 'Failed to create account. Please try again.')
         }
         setIsSubmitting(false)
         return

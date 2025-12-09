@@ -1,4 +1,5 @@
 {
+  "outputDirectory": "dist",
   "functions": {
     "api/webhooks/square-inventory.js": {
       "memory": 512,
@@ -21,10 +22,6 @@
       "maxDuration": 30
     },
     "api/orders/[orderId]/status.js": {
-      "memory": 512,
-      "maxDuration": 30
-    },
-    "api/orders/[orderId]/items.js": {
       "memory": 512,
       "maxDuration": 30
     },
@@ -52,27 +49,15 @@
       "memory": 512,
       "maxDuration": 30
     },
-    "api/order/details.js": {
-      "memory": 512,
-      "maxDuration": 30
-    },
     "api/order/lookup.js": {
       "memory": 512,
       "maxDuration": 30
     },
-    "api/admin/orders.js": {
-      "memory": 512,
-      "maxDuration": 30
-    },
-    "api/admin/orders/[orderId]/status.js": {
-      "memory": 512,
-      "maxDuration": 30
-    },
-    "api/admin/sync-square-orders.js": {
-      "memory": 512,
-      "maxDuration": 60
-    },
     "api/user/cart.js": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/user/wishlist.js": {
       "memory": 512,
       "maxDuration": 30
     },
@@ -89,10 +74,6 @@
       "maxDuration": 30
     },
     "api/user/orders.js": {
-      "memory": 512,
-      "maxDuration": 30
-    },
-    "api/user/order-detail.js": {
       "memory": 512,
       "maxDuration": 30
     },
@@ -127,6 +108,10 @@
         "api/monitoring/auth-failure-rate.js": {
           "memory": 512,
           "maxDuration": 30
+        },
+        "api/monitoring/run-all.js": {
+          "memory": 512,
+          "maxDuration": 120
         }
   },
   "rewrites": [
@@ -147,10 +132,6 @@
       "destination": "/api/webhooks/webhook-test.js"
     },
     {
-      "source": "/api/admin/sync-square-orders",
-      "destination": "/api/admin/sync-square-orders.js"
-    },
-    {
       "source": "/api/catalog/products",
       "destination": "/api/catalog/products.js"
     },
@@ -165,10 +146,6 @@
     {
       "source": "/api/orders/:orderId/status",
       "destination": "/api/orders/[orderId]/status.js"
-    },
-    {
-      "source": "/api/orders/:orderId/items",
-      "destination": "/api/orders/[orderId]/items.js"
     },
     {
       "source": "/api/auth/register",
@@ -195,24 +172,16 @@
       "destination": "/api/auth/reset-password.js"
     },
     {
-      "source": "/api/order/details",
-      "destination": "/api/order/details.js"
-    },
-    {
       "source": "/api/order/lookup",
       "destination": "/api/order/lookup.js"
     },
     {
-      "source": "/api/admin/orders",
-      "destination": "/api/admin/orders.js"
-    },
-    {
-      "source": "/api/admin/orders/:orderId/status",
-      "destination": "/api/admin/orders/[orderId]/status.js"
-    },
-    {
       "source": "/api/user/cart",
       "destination": "/api/user/cart.js"
+    },
+    {
+      "source": "/api/user/wishlist",
+      "destination": "/api/user/wishlist.js"
     },
     {
       "source": "/api/user/sync-cart",
@@ -231,24 +200,8 @@
       "destination": "/api/user/orders.js"
     },
     {
-      "source": "/api/user/order-detail",
-      "destination": "/api/user/order-detail.js"
-    },
-    {
       "source": "/api/user/delete-account",
       "destination": "/api/user/delete-account.js"
-    },
-    {
-      "source": "/api/user/profile",
-      "destination": "/api/user/profile.js"
-    },
-    {
-      "source": "/api/user/password",
-      "destination": "/api/user/password.js"
-    },
-    {
-      "source": "/api/user/orders",
-      "destination": "/api/user/orders.js"
     },
         {
           "source": "/api/webhooks/slack-alert",
@@ -282,42 +235,22 @@
           "source": "/api/monitoring/cart-abandonment",
           "destination": "/api/monitoring/cart-abandonment.js"
         },
-        {
-          "source": "/api/monitoring/auth-failure-rate",
-          "destination": "/api/monitoring/auth-failure-rate.js"
-        },
     {
-      "source": "/(.*)",
+      "source": "/api/monitoring/auth-failure-rate",
+      "destination": "/api/monitoring/auth-failure-rate.js"
+    },
+    {
+      "source": "/api/monitoring/run-all",
+      "destination": "/api/monitoring/run-all.js"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
   "crons": [
     {
-      "path": "/api/monitoring/neon-health",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/monitoring/inventory-sync-check",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/monitoring/order-reconciliation-check",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/monitoring/square-health",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/monitoring/esp-health",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/monitoring/cart-abandonment",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/monitoring/auth-failure-rate",
+      "path": "/api/monitoring/run-all",
       "schedule": "0 8 * * *"
     }
   ]

@@ -79,43 +79,17 @@ export function ForgotPasswordPage({
 
     try {
       console.log('[Forgot Password] Submitting request for:', email.trim())
-      const response = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: email.trim(),
-        }),
-      })
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.forgotPassword(email.trim())
 
-      console.log('[Forgot Password] Response status:', response.status)
-
-      let data
-      try {
-        const text = await response.text()
-        console.log('[Forgot Password] Response text:', text)
-        if (text) {
-          data = JSON.parse(text)
-        }
-      } catch (parseError) {
-        console.error('[Forgot Password] Failed to parse response:', parseError)
-        setError('Invalid response from server. Please try again.')
-        setIsSubmitting(false)
-        return
-      }
-
-      if (!response.ok) {
-        console.error('[Forgot Password] Request failed:', data)
+      if (response.error) {
+        console.error('[Forgot Password] Request failed:', response.error)
         // Show error message if email not found
-        if (data.error === 'Email not found' || response.status === 404) {
-          setError(data.message || 'No account found with this email address. Please check your email or sign up for a new account.')
-          setIsSubmitting(false)
-          return
+        if (response.error.status === 404 || response.error.message?.includes('not found')) {
+          setError('No account found with this email address. Please check your email or sign up for a new account.')
+        } else {
+          setError(response.error.message || 'Failed to send reset email. Please try again.')
         }
-        // For other errors, show error message
-        setError(data.message || 'Failed to send reset email. Please try again.')
         setIsSubmitting(false)
         return
       }
@@ -190,39 +164,16 @@ export function ForgotPasswordPage({
 
                     try {
                       console.log('[Forgot Password] Resending email for:', email.trim())
-                      const response = await fetch('/api/auth/forgot-password', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                          email: email.trim(),
-                        }),
-                      })
+                      const { DataGateway } = await import('../services/DataGateway')
+                      const response = await DataGateway.forgotPassword(email.trim())
 
-                      console.log('[Forgot Password] Resend response status:', response.status)
-
-                      let data
-                      try {
-                        const text = await response.text()
-                        console.log('[Forgot Password] Resend response text:', text)
-                        if (text) {
-                          data = JSON.parse(text)
+                      if (response.error) {
+                        console.error('[Forgot Password] Resend request failed:', response.error)
+                        if (response.error.status === 404 || response.error.message?.includes('not found')) {
+                          setError('No account found with this email address.')
+                        } else {
+                          setError(response.error.message || 'Failed to resend email. Please try again.')
                         }
-                      } catch (parseError) {
-                        console.error('[Forgot Password] Failed to parse resend response:', parseError)
-                        setError('Invalid response from server. Please try again.')
-                        return
-                      }
-
-                      if (!response.ok) {
-                        console.error('[Forgot Password] Resend request failed:', data)
-                        if (data.error === 'Email not found' || response.status === 404) {
-                          setError(data.message || 'No account found with this email address.')
-                          return
-                        }
-                        setError(data.message || 'Failed to resend email. Please try again.')
                         return
                       }
 

@@ -1,15 +1,14 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { Routes, Route, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { featureFlags, siteConfig } from './config'
-import {
-  subscribeToProducts,
-  fetchProductsFromCatalog,
-  type Product,
-  checkAdapterHealth,
-  type ConnectionMode,
-} from './dataAdapter'
-import { initClientMonitors, reportClientError, trackMetric } from './monitoring'
+import type { Product } from './dataAdapter'
+import { initClientMonitors } from './monitoring'
 import { useStackAuth, useUser } from './auth/StackAuthProvider'
+import { useCart, type CartItem } from './contexts/CartContext'
+import { useWishlist } from './contexts/WishlistContext'
+import { useProducts } from './contexts/ProductsContext'
+import { useCheckout } from './contexts/CheckoutContext'
+import { useUI } from './contexts/UIContext'
 import { SearchOverlay } from './components/SearchOverlay'
 import { ProductDetailView } from './components/ProductDetailView'
 import { ProductDetailPage } from './components/ProductDetailPage'
@@ -41,14 +40,6 @@ import { ClearancePage } from './components/ClearancePage'
 import { Header } from './components/Header'
 import { Footer } from './components/Footer'
 import { moneyFormatter } from './formatters'
-
-export type CartItem = Product & { quantity: number }
-
-// LocalStorage key for cart persistence
-const CART_STORAGE_KEY = 'lct_cart'
-
-const wishlistFeatureEnabled =
-  (import.meta.env.VITE_ENABLE_WISHLIST ?? 'true').toString().toLowerCase() !== 'false'
 
 const orderTrackingEnabled =
   (import.meta.env.VITE_ENABLE_ORDER_TRACKING ?? 'true').toString().toLowerCase() !== 'false'
@@ -115,278 +106,80 @@ function App() {
   const { user, isLoading } = useUser()
   const { signInWithOAuth, signOut: stackSignOut } = useStackAuth()
   
+  // Context hooks
+  const {
+    cartItems,
+    cartCount,
+    cartSubtotal,
+    estimatedTax,
+    isCartOpen,
+    addToCart,
+    updateCartQuantity,
+    removeFromCart,
+    clearCart,
+    setCartItems,
+    setCartOpen,
+  } = useCart()
+  const {
+    wishlist,
+    wishlistCount,
+    isWishlistOpen,
+    toggleWishlist,
+    shareWishlist,
+    setWishlistOpen,
+    isWishlistEnabled: wishlistFeatureEnabled,
+  } = useWishlist()
+  const {
+    products,
+    productsLoading,
+    productsError,
+    connectionMode,
+    adapterHealth,
+    lastLatencyMs,
+    categories,
+    newArrivals,
+    featuredCategories,
+  } = useProducts()
+  const {
+    checkoutStep,
+    contactForm,
+    orderConfirmation,
+    paymentError,
+    orderStatusView,
+    isProcessing,
+    setCheckoutStep,
+    setContactForm,
+    setOrderConfirmation,
+    setPaymentError,
+    setOrderStatusView,
+    setIsProcessing,
+  } = useCheckout()
+  const {
+    isSearchOpen,
+    quickViewProduct,
+    pdpProduct,
+    isDashboardOpen,
+    authPage,
+    showCookieBanner,
+    setSearchOpen,
+    setQuickViewProduct,
+    setPdpProduct,
+    setDashboardOpen,
+    setAuthPage,
+    setShowCookieBanner,
+  } = useUI()
+  
   // Wrap signOut to also clear cart
   const signOut = useCallback(async () => {
     // Clear cart state
-    setCartItems([])
+    clearCart()
     console.log('[App] Cleared cart on sign out')
-    
-    // Clear cart from localStorage
-    try {
-      localStorage.removeItem(CART_STORAGE_KEY)
-      console.log('[App] Cleared cart from localStorage on sign out')
-    } catch (error) {
-      console.error('[App] Failed to clear cart from localStorage:', error)
-    }
     
     // Call the actual sign out
     await stackSignOut()
-  }, [stackSignOut])
-  const [products, setProducts] = useState<Product[]>([])
-  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('offline')
-  const [adapterHealth, setAdapterHealth] = useState<'unknown' | 'healthy' | 'degraded'>(
-    'unknown',
-  )
-  const [lastLatencyMs, setLastLatencyMs] = useState(0)
-  const [productsLoading, setProductsLoading] = useState(true)
-  const [productsError, setProductsError] = useState<string | null>(null)
-  const [showCookieBanner, setShowCookieBanner] = useState(false)
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
-  const [isSearchOpen, setSearchOpen] = useState(false)
-  const [pdpProduct, setPdpProduct] = useState<Product | null>(null)
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
-  const [wishlist, setWishlist] = useState<Product[]>([])
-  const [isCartSyncing, setIsCartSyncing] = useState(false)
-  const lastSyncedUserIdRef = useRef<string | null>(null)
-  const hasAttemptedLoadFromStorageRef = useRef<boolean>(false)
-  const [isCartOpen, setCartOpen] = useState(false)
-  const [isWishlistOpen, setWishlistOpen] = useState(false)
-  const [checkoutStep, setCheckoutStep] = useState<'account' | 'contact' | 'review' | null>(null)
-  const [contactForm, setContactForm] = useState<any>(null)
-  const [orderConfirmation, setOrderConfirmation] = useState<{
-    orderNumber: string
-    cartItems: CartItem[]
-    contactForm: any
-    cartSubtotal: number
-    estimatedTax: number
-  } | null>(null)
-  const [paymentError, setPaymentError] = useState<{
-    code: string
-    message: string
-  } | null>(null)
-  const [orderStatusView, setOrderStatusView] = useState<{
-    orderNumber: string
-    cartItems: CartItem[]
-    contactForm: any
-    cartSubtotal: number
-    estimatedTax: number
-  } | null>(null)
-  const [isDashboardOpen, setDashboardOpen] = useState(false)
-  const [authPage, setAuthPage] = useState<'login' | 'signup' | 'forgot-password' | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
+  }, [stackSignOut, clearCart])
+  
   const newArrivalsScrollRef = useRef<HTMLDivElement>(null)
-
-  // P.2: Load cart from localStorage on app initialization (after products are loaded)
-  // For guest users only - logged-in users load from database in P.3
-  useEffect(() => {
-    console.log('[Cart] P.2 useEffect triggered:', { isLoading, productsCount: products.length, hasUser: !!(user && user.id), cartItemsCount: cartItems.length })
-    
-    // Wait for auth to finish loading and products to be available
-    if (isLoading || products.length === 0) {
-      console.log('[Cart] P.2 - Waiting for products or auth to load')
-      return
-    }
-
-    // Skip if user is logged in (will load from database instead)
-    if (user && user.id) {
-      console.log('[Cart] P.2 - User is logged in, skipping localStorage load')
-      return
-    }
-
-    // Only load if cart is empty (to avoid overwriting)
-    if (cartItems.length > 0) {
-      console.log('[Cart] P.2 - Cart already has items, skipping localStorage load')
-      return
-    }
-
-    // Mark that we've attempted to load from storage
-    hasAttemptedLoadFromStorageRef.current = true
-
-    try {
-      const savedCart = localStorage.getItem(CART_STORAGE_KEY)
-      console.log('[Cart] P.2 - Checking localStorage:', savedCart ? 'found data' : 'empty')
-      
-      if (savedCart) {
-        const parsedCart = JSON.parse(savedCart)
-        console.log('[Cart] P.2 - Parsed cart from localStorage:', parsedCart)
-        
-        if (Array.isArray(parsedCart) && parsedCart.length > 0) {
-          // Match localStorage cart items with current products
-          const matchedCart: CartItem[] = []
-          for (const item of parsedCart) {
-            const product = products.find(p => p.id === item.sku)
-            if (product && item.quantity > 0) {
-              matchedCart.push({
-                ...product,
-                quantity: item.quantity,
-              })
-            } else {
-              console.log('[Cart] P.2 - Product not found or invalid quantity:', { sku: item.sku, quantity: item.quantity, productFound: !!product })
-            }
-          }
-          
-          if (matchedCart.length > 0) {
-            console.log('[Cart] ✅ Loaded cart from localStorage:', matchedCart.length, 'items', matchedCart.map(i => ({ id: i.id, name: i.name, qty: i.quantity })))
-            setCartItems(matchedCart)
-          } else {
-            console.log('[Cart] P.2 - No valid items found, clearing localStorage')
-            // Clear invalid cart data
-            localStorage.removeItem(CART_STORAGE_KEY)
-          }
-        } else {
-          console.log('[Cart] P.2 - Invalid cart format in localStorage')
-        }
-      } else {
-        console.log('[Cart] P.2 - No cart found in localStorage')
-      }
-    } catch (error) {
-      console.error('[Cart] ❌ Failed to load cart from localStorage:', error)
-    }
-  }, [products, user, isLoading, cartItems.length]) // Run when products are loaded, user changes, or loading state changes
-
-  // P.1: Save cart to localStorage on every change (for guest users only)
-  useEffect(() => {
-    // Only save to localStorage for guest users (not logged in)
-    // Logged-in users use the database instead
-    if (user && user.id) {
-      console.log('[Cart] User is logged in, skipping localStorage save')
-      return
-    }
-
-      // Don't clear localStorage if we haven't tried loading from it yet
-      // This prevents clearing the cart on initial page load before P.2 can load it
-      if (cartItems.length === 0 && !hasAttemptedLoadFromStorageRef.current) {
-        console.log('[Cart] Cart is empty but haven\'t loaded from storage yet, skipping clear')
-        return
-      }
-
-    console.log('[Cart] Guest user - saving to localStorage:', cartItems.length, 'items')
-
-    try {
-      if (cartItems.length > 0) {
-        // Serialize cart items (only sku and quantity for storage)
-        const cartData = cartItems.map(item => ({
-          sku: item.id,
-          quantity: item.quantity,
-        }))
-        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
-        console.log('[Cart] ✅ Saved guest cart to localStorage:', cartItems.length, 'items', cartData)
-      } else {
-        // Clear localStorage if cart is empty (only after we've attempted to load)
-        localStorage.removeItem(CART_STORAGE_KEY)
-        console.log('[Cart] ✅ Cleared guest cart from localStorage')
-      }
-    } catch (error) {
-      console.error('[Cart] ❌ Failed to save guest cart to localStorage:', error)
-    }
-  }, [cartItems, user])
-
-  // P.3: Sync cart with database when user logs in
-  useEffect(() => {
-    const syncCartOnLogin = async () => {
-      // Only sync if user is logged in, we're not already syncing, and we haven't synced for this user yet
-      if (!user || !user.id || isCartSyncing || lastSyncedUserIdRef.current === user.id) {
-        return
-      }
-
-      try {
-        setIsCartSyncing(true)
-        lastSyncedUserIdRef.current = user.id
-        console.log('[Cart] User logged in, clearing guest cart and loading from database...')
-
-        // Clear guest cart from localStorage and state when user logs in
-        localStorage.removeItem(CART_STORAGE_KEY)
-        setCartItems([])
-        console.log('[Cart] Cleared guest cart on login')
-
-        // Load cart from database only
-        console.log('[Cart] Loading cart from database...')
-        const response = await fetch('/api/user/cart', {
-          method: 'GET',
-          credentials: 'include',
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.cart && data.cart.length > 0) {
-            console.log('[Cart] Loaded cart from database:', data.cart.length, 'items')
-            setCartItems(data.cart)
-            
-            // Save to localStorage for offline access
-            const cartData = data.cart.map((item: CartItem) => ({
-              sku: item.id,
-              quantity: item.quantity,
-            }))
-            localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
-          } else {
-            console.log('[Cart] No cart found in database - starting with empty cart')
-            setCartItems([])
-          }
-        } else {
-          console.error('[Cart] Failed to load cart from database:', response.status)
-        }
-      } catch (error) {
-        console.error('[Cart] Error syncing cart on login:', error)
-        // Reset ref on error so we can retry
-        if (lastSyncedUserIdRef.current === user.id) {
-          lastSyncedUserIdRef.current = null
-        }
-      } finally {
-        setIsCartSyncing(false)
-      }
-    }
-
-    syncCartOnLogin()
-    
-    // Reset ref when user logs out
-    if (!user || !user.id) {
-      lastSyncedUserIdRef.current = null
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]) // Only depend on user.id, not isCartSyncing (which would cause infinite loop)
-
-  // P.4: Save cart to database when logged in user makes changes
-  const saveCartToDatabase = async (items: CartItem[]) => {
-    if (!user || !user.id) {
-      return // Only save if user is logged in
-    }
-
-    // Don't save during initial sync to avoid race conditions
-    if (isCartSyncing) {
-      return
-    }
-
-    try {
-      // Serialize cart items (only sku and quantity)
-      const cartData = items.map(item => ({
-        sku: item.id,
-        quantity: item.quantity,
-      }))
-
-      console.log('[Cart] Saving cart to database:', cartData.length, 'items')
-
-      // Save to database asynchronously (don't block UI)
-      const response = await fetch('/api/user/cart', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          items: cartData,
-        }),
-      })
-
-      if (response.ok) {
-        console.log('[Cart] Successfully saved cart to database')
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('[Cart] Failed to save cart to database:', response.status, errorData)
-      }
-    } catch (error) {
-      console.error('[Cart] Error saving cart to database:', error)
-    }
-  }
 
   // Scroll to top on route change
   useEffect(() => {
@@ -588,9 +381,9 @@ function App() {
             console.warn('[Checkout] Failed to load from localStorage:', localError)
           }
 
-          // Use the new secure order details endpoint (Task 3.7 & 3.8)
+          // Use the RESTful order details endpoint
           // This endpoint joins orders, order_items, and customers tables
-          const orderResponse = await fetch(`${apiBaseUrl}/api/order/details?orderId=${encodeURIComponent(orderId)}`)
+          const orderResponse = await fetch(`${apiBaseUrl}/api/orders/${encodeURIComponent(orderId)}`)
           
           if (orderResponse.ok) {
             const orderData = await orderResponse.json()
@@ -700,295 +493,12 @@ function App() {
     toTrackOrder: () => navigate('/order-lookup'),
     toHome: () => navigate('/'),
   }
-  // Calculate cart count from cartItems, or fallback to localStorage if products aren't loaded yet
-  const [cartCountFromStorage, setCartCountFromStorage] = useState(0)
-  
-  // Update cart count from localStorage when cartItems is empty (for auth pages before products load)
-  useEffect(() => {
-    if (cartItems.length === 0) {
-      try {
-        const savedCart = localStorage.getItem(CART_STORAGE_KEY)
-        if (savedCart) {
-          const parsedCart = JSON.parse(savedCart)
-          if (Array.isArray(parsedCart)) {
-            const count = parsedCart.reduce((total: number, item: any) => total + (item.quantity || 0), 0)
-            setCartCountFromStorage(count)
-          } else {
-            setCartCountFromStorage(0)
-          }
-        } else {
-          setCartCountFromStorage(0)
-        }
-      } catch (error) {
-        setCartCountFromStorage(0)
-      }
-    } else {
-      setCartCountFromStorage(0) // Clear storage count when cartItems is loaded
-    }
-  }, [cartItems.length])
-
-  const cartCount = cartItems.length > 0 
-    ? cartItems.reduce((total, item) => total + item.quantity, 0)
-    : cartCountFromStorage
-  const effectiveWishlist = wishlistFeatureEnabled ? wishlist : []
-  const wishlistCount = effectiveWishlist.length
-
-  const addToCart = (product: Product, quantity = 1) => {
-    console.log('[Cart] addToCart called:', { productId: product.id, productName: product.name, quantity, currentCartItems: cartItems.length })
-    
-    // Test I-104: Stock Limit - Prevent adding more than available stock
-    if (product.stockCount <= 0) {
-      alert('This item is sold out and cannot be added to cart.')
-      return
-    }
-    
-    setCartItems((prev) => {
-      console.log('[Cart] setCartItems callback - prev items:', prev.length)
-      const existing = prev.find((item) => item.id === product.id)
-      const currentQuantity = existing ? existing.quantity : 0
-      const newQuantity = currentQuantity + quantity
-      
-      // Check if adding this quantity would exceed available stock
-      if (newQuantity > product.stockCount) {
-        const available = product.stockCount - currentQuantity
-        if (available <= 0) {
-          alert('This item is sold out and cannot be added to cart.')
-          return prev
-        } else {
-          alert(`Inventory Limit Reached. Only ${available} ${available === 1 ? 'item' : 'items'} available.`)
-          // Add only the available quantity
-          const updated = prev.map((item) =>
-            item.id === product.id
-              ? { ...item, quantity: product.stockCount }
-              : item,
-          )
-          console.log('[Cart] Updated cart (stock limit):', updated.length, 'items')
-          saveCartToDatabase(updated)
-          return updated
-        }
-      }
-      
-      const updated = existing
-        ? prev.map((item) =>
-            item.id === product.id
-              ? { ...item, quantity: newQuantity }
-              : item,
-          )
-        : [...prev, { ...product, quantity }]
-      
-      console.log('[Cart] Updated cart:', updated.length, 'items', updated.map(i => ({ id: i.id, name: i.name, qty: i.quantity })))
-      
-      // P.4: Save to database if logged in
-      saveCartToDatabase(updated)
-      
-      return updated
-    })
-    setCartOpen(true)
-  }
-
-  const updateCartQuantity = (productId: string, quantity: number) => {
-    const safeQuantity = Number.isFinite(quantity) ? quantity : 0
-    setCartItems((prev) => {
-      const updated = prev
-        .map((item) => {
-          if (item.id === productId) {
-            // Test I-104: Stock Limit - Prevent setting quantity above available stock
-            const maxQuantity = Math.min(safeQuantity, item.stockCount)
-            if (safeQuantity > item.stockCount) {
-              alert(`Inventory Limit Reached. Only ${item.stockCount} ${item.stockCount === 1 ? 'item' : 'items'} available.`)
-            }
-            return { ...item, quantity: Math.max(0, maxQuantity) }
-          }
-          return item
-        })
-        .filter((item) => item.quantity > 0)
-      
-      // P.4: Save to database if logged in
-      saveCartToDatabase(updated)
-      
-      return updated
-    })
-  }
-
-  const removeFromCart = (productId: string) => {
-    setCartItems((prev) => {
-      const updated = prev.filter((item) => item.id !== productId)
-      
-      // P.4: Save to database if logged in
-      saveCartToDatabase(updated)
-      
-      return updated
-    })
-  }
-
-  const cartSubtotal = cartItems.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0,
-  )
-  // Tax calculation for pickup orders
-  const estimatedTax = cartSubtotal > 0 ? cartSubtotal * 0.0825 : 0
-
-  const toggleWishlist = (product: Product) => {
-    if (!wishlistFeatureEnabled) {
-      return
-    }
-    setWishlist((prev) => {
-      const exists = prev.some((item) => item.id === product.id)
-      if (exists) {
-        return prev.filter((item) => item.id !== product.id)
-      }
-      return [...prev, product]
-    })
-    setWishlistOpen(true)
-  }
-
-  const shareWishlist = () => {
-    // Prevent sharing if wishlist is empty
-    if (effectiveWishlist.length === 0) {
-      return
-    }
-    const names = effectiveWishlist.map((item) => item.name).join(', ')
-    const payload = {
-      title: 'My Local Commerce wishlist',
-      text: `Here are the items I'm eyeing: ${names}`,
-      url: window.location.origin,
-    }
-    if (navigator.share) {
-      navigator.share(payload).catch(() => {
-        navigator.clipboard?.writeText(`${payload.text} ${payload.url}`)
-      })
-    } else {
-      navigator.clipboard?.writeText(`${payload.text} ${payload.url}`)
-    }
-  }
-  const lastEventRef = useRef(performance.now())
-
-  // Fetch products from catalog API
-  useEffect(() => {
-    let cancelled = false
-    let timer: number | null = null
-
-    const fetchProducts = async () => {
-      try {
-        setProductsLoading(true)
-        setProductsError(null)
-        const startTime = performance.now()
-        const products = await fetchProductsFromCatalog({ limit: 500 })
-        const now = performance.now()
-        const duration = Math.round(now - startTime)
-        
-        if (!cancelled) {
-          setProducts(products)
-          setLastLatencyMs(duration)
-          lastEventRef.current = now
-          setConnectionMode('snapshot') // Using API endpoint, not live WebSocket
-          setProductsLoading(false)
-          
-          // Log performance for monitoring
-          if (duration > 300) {
-            console.warn(`[Performance] Product fetch took ${duration}ms (target: <300ms)`)
-          } else {
-            console.log(`[Performance] Product fetch: ${duration}ms ✅`)
-          }
-        }
-      } catch (error) {
-        console.error('[App] Failed to fetch products from catalog API:', error)
-        if (!cancelled) {
-          setProductsError(error instanceof Error ? error.message : 'Failed to load products')
-          setConnectionMode('offline')
-          setProductsLoading(false)
-          // Fallback to WebSocket subscription if API fails
-          const unsubscribe = subscribeToProducts(
-            siteConfig.appId,
-            (nextProducts) => {
-              const now = performance.now()
-              setProducts(nextProducts)
-              setLastLatencyMs(Math.round(now - lastEventRef.current))
-              lastEventRef.current = now
-              setProductsError(null) // Clear error if fallback succeeds
-            },
-            {
-              onChannelChange: setConnectionMode,
-            },
-          )
-          return () => unsubscribe()
-        }
-      }
-    }
-
-    fetchProducts()
-
-    // Poll for updates every 30 seconds
-    timer = window.setInterval(() => {
-      if (!cancelled) {
-        fetchProducts()
-      }
-    }, 30000)
-
-    return () => {
-      cancelled = true
-      if (timer) {
-        window.clearTimeout(timer)
-      }
-    }
-  }, [])
 
   // Initialize client monitors (respects cookie consent)
   useEffect(() => {
     const teardown = initClientMonitors()
     return () => teardown()
   }, [showCookieBanner]) // Re-initialize when consent changes
-
-  // Health check - only run if using WebSocket adapter, not for catalog API
-  useEffect(() => {
-    // Skip health check if we're using the catalog API (connectionMode === 'snapshot')
-    // The catalog API fetch already sets adapterHealth to 'healthy' on success
-    if (connectionMode === 'snapshot') {
-      return
-    }
-
-    let cancelled = false
-    let timer: number | null = null
-
-    const poll = async () => {
-      try {
-        const healthy = await checkAdapterHealth()
-        if (!cancelled) {
-          setAdapterHealth(healthy ? 'healthy' : 'degraded')
-        }
-      } catch {
-        if (!cancelled) {
-          setAdapterHealth('degraded')
-        }
-      } finally {
-        if (!cancelled) {
-          timer = window.setTimeout(poll, 30000)
-        }
-      }
-    }
-
-    poll()
-
-    return () => {
-      cancelled = true
-      if (timer) {
-        window.clearTimeout(timer)
-      }
-    }
-  }, [connectionMode])
-
-  useEffect(() => {
-    if (!lastLatencyMs) {
-      return
-    }
-    trackMetric('adapter_latency_ms', lastLatencyMs, { mode: connectionMode })
-  }, [lastLatencyMs, connectionMode])
-
-  useEffect(() => {
-    if (connectionMode === 'offline') {
-      reportClientError('Adapter offline or unavailable', 'adapter.offline')
-    }
-  }, [connectionMode])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -1008,32 +518,6 @@ function App() {
   const handleDismissCookies = () => {
     setShowCookieBanner(false)
   }
-
-
-  const categories = useMemo(() => {
-    const unique = new Set(products.map((product) => product.category))
-    return ['All', ...unique]
-  }, [products])
-
-  // New Arrivals - products with higher stock (likely newer)
-  const newArrivals = useMemo(() => {
-    return [...products]
-      .sort((a, b) => b.stockCount - a.stockCount)
-      .slice(0, 8)
-  }, [products])
-
-  // Featured Categories - unique categories from products
-  const featuredCategories = useMemo(() => {
-    const categoryCounts = new Map<string, number>()
-    products.forEach((p) => {
-      categoryCounts.set(p.category, (categoryCounts.get(p.category) || 0) + 1)
-    })
-    return Array.from(categoryCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([category]) => category)
-  }, [products])
-
 
   const adapterHealthLabel =
     adapterHealth === 'healthy'
@@ -1373,33 +857,15 @@ function App() {
                 setIsProcessing(true)
 
                 try {
-                  const isLocalDev =
-                    typeof window !== 'undefined' &&
-                    (window.location.hostname === 'localhost' ||
-                      window.location.hostname === '127.0.0.1')
-                  const apiBaseUrl = isLocalDev
-                    ? 'http://localhost:3000'
-                    : typeof window !== 'undefined'
-                      ? window.location.origin
-                      : ''
+                  const { DataGateway } = await import('./services/DataGateway')
+                  const response = await DataGateway.createCheckout(checkoutPayload)
 
-                  const response = await fetch(`${apiBaseUrl}/api/checkout/create`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify(checkoutPayload),
-                  })
-
-                  const data = await response.json()
-
-                  if (!response.ok) {
-                    throw new Error(data.error || 'Checkout failed')
+                  if (response.error) {
+                    throw new Error(response.error.message || 'Checkout failed')
                   }
 
-                  if (data.url) {
-                    window.location.href = data.url
+                  if (response.data?.url) {
+                    window.location.href = response.data.url
                   } else {
                     throw new Error('No checkout URL received')
                   }
@@ -2385,13 +1851,13 @@ function App() {
                 {wishlistFeatureEnabled ? (
                   <button
                     className={`flex-1 rounded-full border px-4 py-3 text-sm font-semibold ${
-                      effectiveWishlist.some((item) => item.id === quickViewProduct.id)
+                      wishlist.some((item) => item.id === quickViewProduct.id)
                         ? 'border-secondary text-secondary'
                         : 'border-white/20 text-white/80'
                     }`}
                     onClick={() => toggleWishlist(quickViewProduct)}
                   >
-                    {effectiveWishlist.some((item) => item.id === quickViewProduct.id)
+                    {wishlist.some((item) => item.id === quickViewProduct.id)
                       ? 'Saved'
                       : 'Save for later'}
                   </button>
@@ -2422,12 +1888,12 @@ function App() {
               <div className="flex gap-2">
                 <button
                   className={`rounded-full border px-3 py-1 text-xs ${
-                    effectiveWishlist.length === 0
+                    wishlist.length === 0
                       ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/40 opacity-50'
                       : 'border-white/20 text-white/80 hover:border-white/40'
                   }`}
                   onClick={shareWishlist}
-                  disabled={effectiveWishlist.length === 0}
+                  disabled={wishlist.length === 0}
                 >
                   Share
                 </button>
@@ -2440,13 +1906,13 @@ function App() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4 bg-black/80">
-              {effectiveWishlist.length === 0 ? (
+              {wishlist.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-white/20 p-6 text-center text-sm text-slate-300">
                   Save products you love to keep them handy.
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {effectiveWishlist.map((item) => (
+                  {wishlist.map((item) => (
                     <div
                       key={item.id}
                       className="flex gap-3 rounded-2xl border border-white/10 bg-white/5 p-4"
@@ -2507,7 +1973,7 @@ function App() {
             addToCart(pdpProduct, quantity)
           }}
           onSave={wishlistFeatureEnabled ? () => toggleWishlist(pdpProduct) : undefined}
-          isSaved={wishlistFeatureEnabled && effectiveWishlist.some((item) => item.id === pdpProduct.id)}
+          isSaved={wishlistFeatureEnabled && wishlist.some((item) => item.id === pdpProduct.id)}
         />
       ) : null}
 
@@ -2530,17 +1996,15 @@ function App() {
           onRedirectToReview={async () => {
             if (user) {
               try {
-                const response = await fetch('/api/auth/me', {
-                  method: 'GET',
-                  credentials: 'include',
-                })
-                const data = await response.json()
-                if (data?.success && data.customer) {
+                const { DataGateway } = await import('./services/DataGateway')
+                const response = await DataGateway.getCurrentUser()
+                if (!response.error && response.data) {
+                  const userData = response.data
                   setContactForm({
-                    email: data.customer.email,
-                    firstName: data.customer.firstName,
-                    lastName: data.customer.lastName,
-                    phone: data.customer.phone || '',
+                    email: userData.email,
+                    firstName: userData.user_metadata?.firstName || '',
+                    lastName: userData.user_metadata?.lastName || '',
+                    phone: userData.phone || '',
                   })
                   setCheckoutStep('review')
                 }
@@ -2729,7 +2193,7 @@ function App() {
 
             // Clear checkout state
             setCheckoutStep(null)
-            setCartItems([])
+            clearCart()
             setContactForm(null)
 
             // Execute immediate redirect to Square-hosted checkout page

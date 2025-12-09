@@ -84,33 +84,12 @@ export function CheckoutContactPage({
   useEffect(() => {
     if (user && user.id) {
       // Fetch full customer details from API to get phone and other info
-      fetch('/api/auth/me', {
-        method: 'GET',
-        credentials: 'include',
-      })
-        .then((response) => {
-          if (response.ok) {
-            return response.json()
-          }
-          return null
-        })
-        .then((data) => {
-          if (data?.success && data.customer) {
-            // Prioritize API data - it has the most up-to-date information including phone
-            setForm((prev) => ({
-              ...prev,
-              email: data.customer.email || prev.email || '',
-              firstName: data.customer.firstName || prev.firstName || '',
-              lastName: data.customer.lastName || prev.lastName || '',
-              phone: data.customer.phone || prev.phone || user?.phone || '',
-            }))
-            console.log('[CheckoutContactPage] Pre-filled form with customer data:', {
-              email: data.customer.email,
-              firstName: data.customer.firstName,
-              lastName: data.customer.lastName,
-              phone: data.customer.phone,
-            })
-          } else {
+      (async () => {
+        try {
+          const { DataGateway } = await import('../services/DataGateway')
+          const response = await DataGateway.getCurrentUser()
+          
+          if (response.error || !response.data) {
             // Fallback to user metadata if API call fails
             setForm((prev) => ({
               ...prev,
@@ -119,11 +98,27 @@ export function CheckoutContactPage({
               lastName: user.user_metadata?.lastName || prev.lastName || '',
               phone: user.phone || prev.phone || '',
             }))
+            return
           }
-        })
-        .catch((error) => {
+
+          const userData = response.data
+          // Prioritize API data - it has the most up-to-date information including phone
+          setForm((prev) => ({
+            ...prev,
+            email: userData.email || prev.email || '',
+            firstName: userData.user_metadata?.firstName || prev.firstName || '',
+            lastName: userData.user_metadata?.lastName || prev.lastName || '',
+            phone: userData.phone || prev.phone || user?.phone || '',
+          }))
+          console.log('[CheckoutContactPage] Pre-filled form with customer data:', {
+            email: userData.email,
+            firstName: userData.user_metadata?.firstName,
+            lastName: userData.user_metadata?.lastName,
+            phone: userData.phone,
+          })
+        } catch (error) {
           console.error('[CheckoutContactPage] Failed to fetch customer data:', error)
-          // Fallback to user metadata if API call fails
+          // Fallback to user metadata on error
           setForm((prev) => ({
             ...prev,
             email: user.email || prev.email || '',
@@ -131,7 +126,8 @@ export function CheckoutContactPage({
             lastName: user.user_metadata?.lastName || prev.lastName || '',
             phone: user.phone || prev.phone || '',
           }))
-        })
+        }
+      })()
     }
   }, [user])
 

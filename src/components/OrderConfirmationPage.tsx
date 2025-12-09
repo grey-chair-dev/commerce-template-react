@@ -163,20 +163,14 @@ export function OrderConfirmationPage({
           console.log('[Order Confirmation] Using production API:', apiBaseUrl)
         }
 
-        // Fetch order details from database via API
-        const apiUrl = `${apiBaseUrl}/api/order/details?id=${encodeURIComponent(orderId)}`
-        console.log('[Order Confirmation] Fetching order details from API:', apiUrl)
+        // Fetch order details from database via API (RESTful endpoint)
+        console.log('[Order Confirmation] Fetching order details from API:', orderId)
         
-        const response = await fetch(apiUrl, {
-          method: 'GET',
-          credentials: 'include', // Include cookies for authentication
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
+        const { DataGateway } = await import('../services/DataGateway')
+        const response = await DataGateway.getOrder(orderId)
         
-        if (!response.ok) {
-          if (response.status === 404) {
+        if (response.error) {
+          if (response.error.status === 404) {
             setError('Order not found. Please check your order ID and try again.')
           } else {
             setError('Failed to load order details. Please try again later.')

@@ -7,26 +7,22 @@
  * Body: { productId: string, releaseId?: number }
  */
 
-// Vercel serverless function types
-type VercelRequest = {
-  method?: string
-  url?: string
-  headers: Record<string, string | string[] | undefined>
-  body?: any
-  query?: Record<string, string | string[] | undefined>
-}
-type VercelResponse = {
-  status: (code: number) => VercelResponse
-  json: (data: any) => void
-  setHeader: (name: string, value: string) => void
-  end: () => void
-}
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getDiscogsRelease, extractTracklist, matchProductToDiscogs } from '../../src/services/discogsAdapter.js'
 import { neon } from '@neondatabase/serverless'
+import { isDiscogsEnabled } from '../utils/featureFlags.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Check feature flag - if disabled, return immediately
+  if (!isDiscogsEnabled()) {
+    return res.status(503).json({
+      error: 'Discogs feature is disabled',
+      message: 'The Discogs feature is currently disabled. Set FEATURE_FLAG_DISCOGS_ENABLED=true to enable.',
+    })
   }
 
   const { productId, releaseId, productName } = req.body

@@ -16,6 +16,7 @@
  */
 
 import { neon } from '@neondatabase/serverless';
+import { sendSlackAlert } from '../utils/slackAlerter.js';
 
 // Alert threshold: Alert if failure rate exceeds 3%
 const FAILURE_RATE_THRESHOLD = 0.03; // 3%
@@ -100,135 +101,38 @@ async function calculateAuthFailureRate(sql, startDate, endDate) {
 
 /**
  * Send Slack alert for high authentication failure rate
+ * Now uses centralized SlackAlerterService
  */
-async function sendSlackAlert(alertData) {
-  let webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  
-  // Try to load from .env.local if not found
-  if (!webhookUrl) {
-    try {
-      const { config } = await import('dotenv');
-      const { fileURLToPath } = await import('url');
-      const { dirname, join } = await import('path');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const result = config({ path: join(__dirname, '../../.env.local') });
-      if (result && !result.error) {
-        webhookUrl = process.env.SLACK_WEBHOOK_URL;
-      }
-    } catch (e) {
-      // dotenv not available
-    }
-  }
-  
-  if (!webhookUrl) {
-    console.warn('[Auth Failure Rate] SLACK_WEBHOOK_URL not configured, skipping alert');
-    return false;
-  }
-  
-  // Strip quotes if present
-  webhookUrl = webhookUrl.trim().replace(/^["']|["']$/g, '');
-  
-  // Get base URL for links
+async function sendAuthFailureRateAlert(alertData) {
   const baseUrl = process.env.VERCEL_URL 
     ? `https://${process.env.VERCEL_URL}` 
     : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   
-  const message = {
-    text: `🚨 High Authentication Failure Rate Detected`,
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `🚨 High Authentication Failure Rate Detected`,
-          emoji: true,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Failure Rate:*\n${alertData.failureRate.toFixed(2)}%`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Threshold:*\n3%`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Total Attempts:*\n${alertData.totalAttempts}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Failed:*\n${alertData.failed}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*⚠️ Alert:*\nAuthentication failure rate of ${alertData.failureRate.toFixed(2)}% exceeds the 3% threshold. Users may be unable to log in.`,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*📋 Recommended Actions:*\n${alertData.actionableSteps.join('\n')}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🔗 Quick Links:*\n` +
-                  `<${baseUrl}/api/monitoring/debug|View Debug Info>\n` +
-                  `<${baseUrl}/api/auth/login|Test Login Endpoint>\n` +
-                  `<https://vercel.com/dashboard|Vercel Logs>`
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `⚠️ *Critical Impact:* Users cannot access their accounts. Checkout and order history are blocked.`,
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `Timestamp: ${new Date().toISOString()}`,
-          },
-        ],
-      },
+  return await sendSlackAlert({
+    priority: 'high',
+    route: '/api/monitoring/auth-failure-rate',
+    title: 'High Authentication Failure Rate Detected',
+    message: `Authentication failure rate of ${alertData.failureRate.toFixed(2)}% exceeds the 3% threshold. Users may be unable to log in.`,
+    context: `*Failure Rate:* ${alertData.failureRate.toFixed(2)}%\n*Threshold:* 3%\n*Total Attempts:* ${alertData.totalAttempts}\n*Failed:* ${alertData.failed}`,
+    recommendedAction: alertData.actionableSteps || [
+      'IMMEDIATE CHECK: Verify the JWT_SECRET environment variable is correct and matches the value used to sign tokens',
+      'REVIEW LOGS: Check Vercel logs for authentication errors',
+      'TEST LOGIN: Manually test the login endpoint',
+      'CHECK PASSWORD HASHES: Verify bcrypt password hashing is working correctly',
+      '⚠️ Critical Impact: Users cannot access their accounts. Checkout and order history are blocked.',
     ],
-  };
-  
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('[Auth Failure Rate] Failed to send Slack alert:', error);
-    return false;
-  }
+    fields: {
+      'Failure Rate': `${alertData.failureRate.toFixed(2)}%`,
+      'Threshold': '3%',
+      'Total Attempts': String(alertData.totalAttempts),
+      'Failed': String(alertData.failed),
+    },
+    links: {
+      'View Debug Info': `${baseUrl}/api/monitoring/debug`,
+      'Test Login Endpoint': `${baseUrl}/api/auth/login`,
+      'Vercel Logs': 'https://vercel.com/dashboard',
+    },
+  });
 }
 
 export default async function handler(req, res) {
@@ -286,14 +190,14 @@ export default async function handler(req, res) {
     
     // Send Slack alert if POST request and threshold exceeded
     if (req.method === 'POST' && result.status === 'threshold_exceeded' && rateData.totalAttempts > 0) {
-      await sendSlackAlert({
+      await sendAuthFailureRateAlert({
         failureRate: rateData.failureRate,
         totalAttempts: rateData.totalAttempts,
         successful: rateData.successful,
         failed: rateData.failed,
         actionableSteps: [
-          '1. *IMMEDIATE CHECK:* Verify the **`JWT_SECRET`** environment variable is correct and matches the value used to sign tokens.',
-          '2. *TEST LOGIC:* Manually test the `/api/auth/login` endpoint to see if `bcrypt.compare()` is failing.',
+          'IMMEDIATE CHECK: Verify the JWT_SECRET environment variable is correct and matches the value used to sign tokens',
+          'TEST LOGIC: Manually test the /api/auth/login endpoint to see if bcrypt.compare() is failing',
         ],
       });
     }

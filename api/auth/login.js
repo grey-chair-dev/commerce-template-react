@@ -104,7 +104,7 @@ export default async function handler(req, res) {
     // Step B: Verify user exists and retrieve password_hash
     const normalizedEmail = email.toLowerCase().trim();
     const customerResult = await sql`
-      SELECT id, email, first_name, last_name, password_hash
+      SELECT id, email, first_name, last_name, password_hash, role
       FROM customers
       WHERE email = ${normalizedEmail}
     `;
@@ -196,11 +196,15 @@ export default async function handler(req, res) {
       });
     }
 
+    // Get role from customer record, default to 'user' if not set
+    const role = customer.role || 'user';
+
     const token = jwt.sign(
       {
         customerId: customer.id,
         email: customer.email,
         type: 'customer',
+        role: role, // Include role in JWT payload for RBAC
       },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRATION }
@@ -229,6 +233,7 @@ export default async function handler(req, res) {
         email: customer.email,
         firstName: customer.first_name,
         lastName: customer.last_name,
+        role: role,
       },
       // Note: Token is stored in HTTP-only cookie, not returned in JSON
       // This prevents XSS attacks from stealing the token

@@ -4,6 +4,7 @@ import type { Product } from '../dataAdapter'
 import { moneyFormatter } from '../formatters'
 import { Header } from './Header'
 import { Footer } from './Footer'
+import { useDiscogsEnabled } from '../utils/featureFlags'
 
 type ProductDetailPageProps = {
   product: Product | null
@@ -73,6 +74,9 @@ export function ProductDetailPage({
   const [selectedImage, setSelectedImage] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description')
+  
+  // Feature flag: Check if Discogs functionality is enabled
+  const isDiscogsEnabled = useDiscogsEnabled()
   
   // Use product from prop or find by ID
   const product = productProp || (productId ? products.find((p) => p.id === productId) : null)
@@ -398,6 +402,24 @@ export function ProductDetailPage({
               <div className="space-y-3 sm:space-y-4">
                 <h2 className="text-xl font-semibold text-white sm:text-2xl">Product Description</h2>
                 <p className="text-base text-slate-200 leading-relaxed sm:text-lg">{product.description}</p>
+                
+                {/* Discogs Tracklist Section - Only render if feature flag is enabled and tracklist exists */}
+                {isDiscogsEnabled && product.tracklist && product.tracklist.length > 0 && (
+                  <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+                    <h3 className="mb-4 text-lg font-semibold text-white">Track Listing</h3>
+                    <div className="space-y-2">
+                      {product.tracklist.map((track, index) => (
+                        <div key={index} className="flex items-center justify-between border-b border-white/10 pb-2 last:border-0 last:pb-0">
+                          <span className="text-sm font-medium text-white">{track.position}</span>
+                          <span className="flex-1 text-sm text-slate-200 ml-4">{track.title}</span>
+                          {track.duration && (
+                            <span className="text-xs text-slate-400 ml-4">{track.duration}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

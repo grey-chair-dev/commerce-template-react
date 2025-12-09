@@ -14,6 +14,8 @@
  *   GET /api/monitoring/esp-health - Check status without alerts
  */
 
+import { sendSlackAlert } from '../utils/slackAlerter.js';
+
 // Supported ESPs and their status page URLs
 const ESP_CONFIGS = {
   sendgrid: {
@@ -214,165 +216,52 @@ async function testESPAPI(espType) {
 
 /**
  * Send Slack alert for ESP issues
+ * Now uses centralized SlackAlerterService
  */
-async function sendSlackAlert(alertData, espConfig) {
-  let webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  
-  // Try to load from .env.local if not found
-  if (!webhookUrl) {
-    try {
-      const { config } = await import('dotenv');
-      const { fileURLToPath } = await import('url');
-      const { dirname, join } = await import('path');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const result = config({ path: join(__dirname, '../../.env.local') });
-      if (result && !result.error) {
-        webhookUrl = process.env.SLACK_WEBHOOK_URL;
-      }
-    } catch (e) {
-      // dotenv not available
-    }
-  }
-  
-  if (!webhookUrl) {
-    console.warn('[ESP Health] SLACK_WEBHOOK_URL not configured, skipping alert');
-    return false;
-  }
-  
-  // Strip quotes if present
-  webhookUrl = webhookUrl.trim().replace(/^["']|["']$/g, '');
-  
-  // Get base URL for links
+async function sendESPHealthAlert(alertData, espConfig) {
   const baseUrl = process.env.VERCEL_URL 
     ? `https://${process.env.VERCEL_URL}` 
     : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   
-  const priority = alertData.priority === 'critical' ? '🔴 CRITICAL' : 
-                   alertData.priority === 'major' ? '🟠 MAJOR' : '🟡 MINOR';
+  const statusPageUrl = alertData.statusPage?.source && alertData.statusPage.source !== 'none'
+    ? alertData.statusPage.source.replace('/api/v2/status.json', '')
+    : null;
   
-  // Build incident details
-  let incidentText = '';
-  if (alertData.incidents && alertData.incidents.length > 0) {
-    incidentText = alertData.incidents.slice(0, 5).map((incident, i) => {
-      const name = incident.name || 'Unknown Incident';
-      const status = incident.status || 'investigating';
-      const impact = incident.impact || 'unknown';
-      return `${i + 1}. *${name}*\n   Status: ${status} | Impact: ${impact}`;
-    }).join('\n\n');
-    
-    if (alertData.incidents.length > 5) {
-      incidentText += `\n\n...and ${alertData.incidents.length - 5} more incidents`;
-    }
-  }
+  const recommendedAction = [
+    'PROACTIVE UPDATE: Immediately display a banner on your site informing customers of the issue (e.g., "Email confirmations are temporarily delayed")',
+    'FULFILLMENT: If the email service is down, manually notify customers about their pickup status',
+    statusPageUrl ? `CHECK STATUS: View ${espConfig.name} Status Page for current incidents` : 'CHECK STATUS: Review ESP status',
+    'REVIEW LOGS: Check Vercel logs for /api/monitoring/esp-health',
+    'VERIFY CREDENTIALS: Ensure API keys/domains are valid',
+    '⚠️ Critical Impact: Order confirmation emails may not be delivered. Customers won\'t receive pickup instructions.',
+  ];
   
-  const message = {
-    text: `🚨 ${espConfig.name} Health Alert`,
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `🚨 ${espConfig.name} Health Alert`,
-          emoji: true,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Priority:*\n${priority}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Status:*\n${alertData.status}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Source:*\n${alertData.source}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*ESP:*\n${espConfig.name}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Alert:*\n${alertData.message}`,
-        },
-      },
-      ...(incidentText ? [{
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*📋 Incidents:*\n${incidentText}`,
-        },
-      }] : []),
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🚨 IMMEDIATE ACTION REQUIRED:*\n` +
-                  `1. *PROACTIVE UPDATE:* Immediately display a banner on your site informing customers of the issue (e.g., "Email confirmations are temporarily delayed").\n` +
-                  `2. *FULFILLMENT:* If the email service is down, manually notify customers about their pickup status.\n` +
-                  `3. *CHECK STATUS:* ${alertData.statusPage.source !== 'none' ? `<${alertData.statusPage.source.replace('/api/v2/status.json', '')}|View ${espConfig.name} Status Page>` : 'N/A'}\n` +
-                  `4. *REVIEW LOGS:* Check Vercel logs for /api/monitoring/esp-health\n` +
-                  `5. *VERIFY CREDENTIALS:* Ensure API keys/domains are valid`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🔗 Quick Links:*\n` +
-                  `<${espConfig.statusPageUrl.replace('/api/v2/status.json', '')}|${espConfig.name} Status Page>\n` +
-                  `<${espConfig.dashboardUrl}|${espConfig.name} Dashboard>\n` +
-                  `<${baseUrl}/api/monitoring/debug|View Debug Info>`
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `⚠️ *Critical Impact:* Order confirmation emails may not be delivered. Customers won't receive pickup instructions.`,
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `Timestamp: ${new Date().toISOString()}`,
-          },
-        ],
-      },
-    ],
+  const links = {
+    'View Debug Info': `${baseUrl}/api/monitoring/debug`,
+    [`${espConfig.name} Dashboard`]: espConfig.dashboardUrl,
   };
   
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('[ESP Health] Failed to send Slack alert:', error);
-    return false;
+  if (statusPageUrl) {
+    links[`${espConfig.name} Status Page`] = statusPageUrl;
   }
+  
+  return await sendSlackAlert({
+    priority: alertData.priority || 'medium',
+    route: '/api/monitoring/esp-health',
+    title: `${espConfig.name} Health Alert`,
+    message: alertData.message,
+    context: `*Status:* ${alertData.status}\n*Source:* ${alertData.source}\n*ESP:* ${espConfig.name}`,
+    recommendedAction,
+    fields: {
+      'Status': alertData.status,
+      'Source': alertData.source,
+      'ESP': espConfig.name,
+    },
+    links,
+    metadata: {
+      incidents: alertData.incidents,
+    },
+  });
 }
 
 export default async function handler(req, res) {
@@ -497,7 +386,7 @@ export default async function handler(req, res) {
     // Send Slack alerts if POST request and alerts exist
     if (req.method === 'POST' && alerts.length > 0) {
       for (const alert of alerts) {
-        await sendSlackAlert(alert, espConfig);
+        await sendESPHealthAlert(alert, espConfig);
       }
     }
     

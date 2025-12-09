@@ -14,6 +14,7 @@
 
 import { neon } from '@neondatabase/serverless';
 import { SquareClient, SquareEnvironment } from 'square';
+import { sendSlackAlert } from '../utils/slackAlerter.js';
 
 /**
  * Fetch paid orders from Square (last 7 days)
@@ -129,143 +130,50 @@ function findMissingOrders(squareOrders, neonOrders) {
 
 /**
  * Send Slack alert for missing orders
+ * Now uses centralized SlackAlerterService
  */
-async function sendSlackAlert(missingOrders, totalChecked) {
-  const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
-  if (!slackWebhookUrl) {
-    console.warn('[Order Reconciliation] SLACK_WEBHOOK_URL not configured, skipping alert');
-    return false;
-  }
-  
-  // Try to load from .env.local if running locally
-  let webhookUrl = slackWebhookUrl;
-  if (!webhookUrl && process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    try {
-      const { config } = await import('dotenv');
-      const { fileURLToPath } = await import('url');
-      const { dirname, join } = await import('path');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const result = config({ path: join(__dirname, '../../.env.local') });
-      if (result && !result.error) {
-        webhookUrl = process.env.SLACK_WEBHOOK_URL;
-      }
-    } catch (e) {
-      // dotenv not available
-    }
-  }
-  
-  if (!webhookUrl) {
-    return false;
-  }
-  
-  // Strip quotes if present
-  if (webhookUrl) {
-    webhookUrl = webhookUrl.trim().replace(/^["']|["']$/g, '');
-  }
-  
-  const emoji = missingOrders.length > 0 ? '🚨' : '✅';
-  const title = missingOrders.length > 0 
-    ? '🚨 Order Reconciliation Failure' 
-    : '✅ Daily Sync Check Passed';
-  
-  // Build missing orders list
-  let missingOrdersText = '';
-  if (missingOrders.length > 0) {
-    missingOrdersText = missingOrders.slice(0, 20).map((order, i) => {
-      const amount = (order.total_amount / 100).toFixed(2);
-      return `${i + 1}. *${order.order_number}* (Square ID: \`${order.square_order_id}\`)\n   Amount: $${amount} ${order.currency} | Date: ${new Date(order.created_at).toLocaleDateString()}`;
-    }).join('\n\n');
-    
-    if (missingOrders.length > 20) {
-      missingOrdersText += `\n\n...and ${missingOrders.length - 20} more missing orders`;
-    }
-  }
-  
+async function sendOrderReconciliationAlert(missingOrders, totalChecked) {
   const totalMissingAmount = missingOrders.reduce((sum, order) => sum + (order.total_amount / 100), 0);
   
-  const message = {
-    text: title,
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: title,
-          emoji: true,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Status:*\n${missingOrders.length > 0 ? '❌ Failures Detected' : '✅ All Checks Passed'}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Orders Checked:*\n${totalChecked}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Missing Orders:*\n${missingOrders.length}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Total Missing Amount:*\n$${totalMissingAmount.toFixed(2)}`,
-          },
-        ],
-      },
-      ...(missingOrders.length > 0 ? [{
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*📋 Missing Orders (Paid in Square, Missing in Neon):*\n${missingOrdersText}`,
-        },
-      }] : [{
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '*✅ All orders are reconciled!*',
-        },
-      }]),
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*📋 Recommended Actions:*\n${missingOrders.length > 0 
-              ? '1. *Check Webhook Logs*: Review /api/webhooks/square-order-paid logs in Vercel\n2. *Verify Webhook Configuration*: Ensure Square webhook is active and pointing to correct URL\n3. *Check Square Dashboard*: Verify orders exist in Square\n4. *Review Database*: Check Neon orders table for any errors\n5. *Manual Reconciliation*: Consider manually processing missing orders if needed'
-              : '1. *Continue Monitoring*: Daily checks will continue automatically\n2. *Review Logs*: Check Vercel logs for any warnings\n3. *Verify Webhooks*: Ensure Square webhooks are active'}`,
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `Timestamp: ${new Date().toISOString()} | <https://console.neon.tech|View Neon Console> | <https://developer.squareup.com/apps|View Square Dashboard>`,
-          },
-        ],
-      },
-    ],
-  };
+  const title = missingOrders.length > 0 
+    ? 'Order Reconciliation Failure' 
+    : 'Daily Sync Check Passed';
   
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('[Order Reconciliation] Failed to send Slack alert:', error);
-    return false;
-  }
+  const recommendedAction = missingOrders.length > 0
+    ? [
+        'Check Webhook Logs: Review /api/webhooks/square-order-paid logs in Vercel',
+        'Verify Webhook Configuration: Ensure Square webhook is active and pointing to correct URL',
+        'Check Square Dashboard: Verify orders exist in Square',
+        'Review Database: Check Neon orders table for any errors',
+        'Manual Reconciliation: Consider manually processing missing orders if needed',
+      ]
+    : [
+        'Continue Monitoring: Daily checks will continue automatically',
+        'Review Logs: Check Vercel logs for any warnings',
+        'Verify Webhooks: Ensure Square webhooks are active',
+      ];
+  
+  return await sendSlackAlert({
+    priority: missingOrders.length > 0 ? 'high' : 'low',
+    route: '/api/monitoring/order-reconciliation-check',
+    title,
+    message: missingOrders.length > 0 
+      ? `Found ${missingOrders.length} order(s) paid in Square but missing from Neon database`
+      : 'All orders are reconciled between Square and Neon',
+    context: `*Orders Checked:* ${totalChecked}\n*Missing Orders:* ${missingOrders.length}\n*Total Missing Amount:* $${totalMissingAmount.toFixed(2)}`,
+    recommendedAction,
+    fields: {
+      'Status': missingOrders.length > 0 ? '❌ Failures Detected' : '✅ All Checks Passed',
+      'Orders Checked': String(totalChecked),
+      'Missing Orders': String(missingOrders.length),
+      'Total Missing Amount': `$${totalMissingAmount.toFixed(2)}`,
+    },
+    links: {
+      'View Neon Console': 'https://console.neon.tech',
+      'View Square Dashboard': 'https://developer.squareup.com/apps',
+    },
+    metadata: missingOrders.length > 0 ? { missingOrders } : undefined,
+  });
 }
 
 export default async function handler(req, res) {
@@ -349,7 +257,7 @@ export default async function handler(req, res) {
     
     // Send Slack alert if POST request
     if (req.method === 'POST') {
-      await sendSlackAlert(missingOrders, result.totalChecked);
+      await sendOrderReconciliationAlert(missingOrders, result.totalChecked);
     }
     
     return res.status(200).json(result);

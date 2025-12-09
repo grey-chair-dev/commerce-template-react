@@ -90,24 +90,22 @@ export function ProfilePage({
     const fetchProfile = async () => {
       try {
         setIsLoadingProfile(true)
-        const response = await fetch('/api/user/profile', {
-          method: 'GET',
-          credentials: 'include',
-        })
+        const { DataGateway } = await import('../services/DataGateway')
+        const response = await DataGateway.getProfile()
 
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.customer) {
-            setProfile({
-              firstName: data.customer.firstName || '',
-              lastName: data.customer.lastName || '',
-              email: data.customer.email || '',
-              phone: data.customer.phone || '',
-            })
-            setOriginalEmail(data.customer.email || '')
-          }
-        } else {
-          setError('Failed to load profile')
+        if (response.error) {
+          setError(response.error.message || 'Failed to load profile')
+        } else if (response.data) {
+          const profileData = response.data
+          // Extract firstName and lastName from name field or use separate fields
+          const nameParts = profileData.name?.split(' ') || []
+          setProfile({
+            firstName: nameParts[0] || '',
+            lastName: nameParts.slice(1).join(' ') || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+          })
+          setOriginalEmail(profileData.email || '')
         }
       } catch (err) {
         console.error('[Profile] Error loading profile:', err)
@@ -131,31 +129,34 @@ export function ProfilePage({
       // Check if email changed - for now, we'll allow it but could add verification later
       const emailChanged = profile.email !== originalEmail
 
-      const response = await fetch('/api/user/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          firstName: profile.firstName,
-          lastName: profile.lastName,
-          email: profile.email,
-          phone: profile.phone,
-        }),
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.updateProfile({
+        name: `${profile.firstName} ${profile.lastName}`.trim() || profile.email,
+        email: profile.email,
+        phone: profile.phone,
       })
 
-      const data = await response.json()
-
-      if (response.ok && data.success) {
+      if (response.error) {
+        setError(response.error.message || 'Failed to update profile')
+      } else if (response.data) {
+        const emailChanged = profile.email !== originalEmail
         setSuccess(emailChanged 
           ? 'Profile updated successfully! Please check your new email for verification.' 
           : 'Profile updated successfully!')
         setOriginalEmail(profile.email)
         // Clear success message after 5 seconds
         setTimeout(() => setSuccess(null), 5000)
+        
+        // Update profile state with new data
+        const nameParts = response.data.name?.split(' ') || []
+        setProfile({
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: response.data.email || '',
+          phone: response.data.phone || '',
+        })
       } else {
-        setError(data.message || 'Failed to update profile')
+        setError('Failed to update profile')
       }
     } catch (err) {
       console.error('[Profile] Error updating profile:', err)
@@ -185,21 +186,20 @@ export function ProfilePage({
     setIsChangingPassword(true)
 
     try {
-      const response = await fetch('/api/user/password', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
-        }),
-      })
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.updatePassword(
+        passwordForm.currentPassword,
+        passwordForm.newPassword,
+      )
 
-      const data = await response.json()
-
-      if (response.ok && data.success) {
+      if (response.error) {
+        const errorDetails = response.error.details as any
+        setPasswordError(
+          response.error.message || 
+          (Array.isArray(errorDetails) ? errorDetails[0] : errorDetails) || 
+          'Failed to change password'
+        )
+      } else {
         setPasswordSuccess('Password changed successfully!')
         setPasswordForm({
           currentPassword: '',
@@ -208,8 +208,6 @@ export function ProfilePage({
         })
         setShowPasswordSection(false)
         setTimeout(() => setPasswordSuccess(null), 3000)
-      } else {
-        setPasswordError(data.message || data.details?.[0] || 'Failed to change password')
       }
     } catch (err) {
       console.error('[Profile] Error changing password:', err)
@@ -240,26 +238,16 @@ export function ProfilePage({
     setError(null)
 
     try {
-      const response = await fetch('/api/user/delete-account', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          password: deleteAccountForm.password,
-        }),
-      })
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.deleteAccount()
 
-      const data = await response.json()
-
-      if (response.ok && data.success) {
+      if (response.error) {
+        setError(response.error.message || 'Failed to delete account')
+      } else {
         // Account deleted - sign out and redirect
         await onSignOut()
         navigate('/')
         alert('Your account has been deleted successfully.')
-      } else {
-        setError(data.message || 'Failed to delete account')
       }
     } catch (err) {
       console.error('[Profile] Error deleting account:', err)

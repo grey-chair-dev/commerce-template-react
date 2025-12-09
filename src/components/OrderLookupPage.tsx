@@ -81,29 +81,21 @@ export function OrderLookupPage({
     setIsSearching(true)
 
     try {
-      const response = await fetch('/api/order/lookup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          orderNumber: orderNumber.trim(),
-          email: email.trim(),
-        }),
-      })
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.lookupOrder(
+        orderNumber.trim(),
+        email.trim(),
+      )
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.message || 'Order not found. Please check your order number and email address.')
+      if (response.error) {
+        setError(response.error.message || 'Order not found. Please check your order number and email address.')
         setIsSearching(false)
         return
       }
 
-      if (data.success && data.order) {
+      if (response.data) {
         // Navigate to order confirmation page with order ID
-        navigate(`/order-confirmation?id=${data.order.id}`)
+        navigate(`/order-confirmation?id=${response.data.id}`)
       } else {
         setError('Order not found. Please check your order number and email address.')
       }

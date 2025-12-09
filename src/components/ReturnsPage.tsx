@@ -124,23 +124,18 @@ export function ReturnsPage({
       try {
         setIsLoadingOrders(true)
         setError(null)
-        const response = await fetch('/api/user/orders', {
-          method: 'GET',
-          credentials: 'include',
-        })
+        const { DataGateway } = await import('../services/DataGateway')
+        const response = await DataGateway.getOrders()
 
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.orders) {
-            // Filter orders that are eligible for return (paid, completed, or ready for pickup)
-            const eligibleOrders = data.orders.filter((order: Order) => {
-              const status = order.status.toLowerCase()
-              return ['paid', 'completed', 'ready for pickup', 'picked up'].includes(status)
-            })
-            setOrders(eligibleOrders)
-          }
+        if (response.error) {
+          setError(response.error.message || 'Failed to load orders')
         } else {
-          setError('Failed to load orders')
+          // Filter orders that are eligible for return (paid, completed, or ready for pickup)
+          const eligibleOrders = (response.data || []).filter((order: Order) => {
+            const status = order.status.toLowerCase()
+            return ['paid', 'completed', 'ready for pickup', 'picked up'].includes(status)
+          })
+          setOrders(eligibleOrders)
         }
       } catch (err) {
         console.error('[Returns] Error loading orders:', err)
@@ -160,15 +155,14 @@ export function ReturnsPage({
       setSelectedOrder(order)
       setSelectedItems(new Map())
 
-      const response = await fetch(`/api/user/order-detail?orderId=${order.id}`, {
-        method: 'GET',
-        credentials: 'include',
-      })
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.getOrder(order.id)
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.order) {
-          setOrderItems(data.order.items)
+      if (!response.error && response.data) {
+        const data = response.data
+        // RESTful endpoint returns order directly with items array
+        if (data && Array.isArray(data.items)) {
+          setOrderItems(data.items)
         }
       } else {
         setError('Failed to load order items')
@@ -273,19 +267,14 @@ export function ReturnsPage({
       setReturnNotes('')
 
       // Reload orders
-      const response = await fetch('/api/user/orders', {
-        method: 'GET',
-        credentials: 'include',
-      })
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.orders) {
-          const eligibleOrders = data.orders.filter((order: Order) => {
-            const status = order.status.toLowerCase()
-            return ['paid', 'completed', 'ready for pickup', 'picked up'].includes(status)
-          })
-          setOrders(eligibleOrders)
-        }
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.getOrders()
+      if (!response.error && response.data) {
+        const eligibleOrders = response.data.filter((order: Order) => {
+          const status = order.status.toLowerCase()
+          return ['paid', 'completed', 'ready for pickup', 'picked up'].includes(status)
+        })
+        setOrders(eligibleOrders)
       }
     } catch (err) {
       console.error('[Returns] Error submitting return:', err)

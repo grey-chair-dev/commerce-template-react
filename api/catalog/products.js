@@ -40,16 +40,30 @@ export default async function handler(req, res) {
   ].filter(Boolean);
 
   // Always set CORS headers - allow localhost origins in development
+  // When credentials are included, we must set Access-Control-Allow-Credentials: true
+  // and cannot use wildcard (*) for Access-Control-Allow-Origin
+  let originToAllow = null;
+  
   if (origin) {
-    // Check if origin is localhost or matches allowed origins
-    if (origin.includes('localhost') || allowedOrigins.some(allowed => origin.includes(allowed.split('://')[1]))) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
+    // Always allow localhost origins (common in development)
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      originToAllow = origin;
     } else if (allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
+      originToAllow = origin;
+    } else if (allowedOrigins.some(allowed => origin.includes(allowed.split('://')[1]))) {
+      originToAllow = origin;
     }
-  } else if (process.env.NODE_ENV === 'development' || !process.env.VERCEL) {
-    // In development, allow all origins if no origin header
-    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  // If no origin header or origin not matched, default to localhost:5173 in development
+  if (!originToAllow && (process.env.NODE_ENV === 'development' || !process.env.VERCEL)) {
+    originToAllow = 'http://localhost:5173';
+  }
+
+  // Set CORS headers - always set credentials when we have an origin
+  if (originToAllow) {
+    res.setHeader('Access-Control-Allow-Origin', originToAllow);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -57,6 +71,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
 
   // Handle preflight OPTIONS request
+  // IMPORTANT: Must return credentials header in OPTIONS response too
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }

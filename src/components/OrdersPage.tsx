@@ -144,18 +144,13 @@ export function OrdersPage({
       try {
         setIsLoadingOrders(true)
         setError(null)
-        const response = await fetch('/api/user/orders', {
-          method: 'GET',
-          credentials: 'include',
-        })
+        const { DataGateway } = await import('../services/DataGateway')
+        const response = await DataGateway.getOrders()
 
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success && data.orders) {
-            setOrders(data.orders)
-          }
+        if (response.error) {
+          setError(response.error.message || 'Failed to load orders')
         } else {
-          setError('Failed to load orders')
+          setOrders(response.data || [])
         }
       } catch (err) {
         console.error('[Orders] Error loading orders:', err)
@@ -171,18 +166,13 @@ export function OrdersPage({
   const handleViewOrderDetail = async (orderId: string) => {
     try {
       setIsLoadingOrderDetail(true)
-      const response = await fetch(`/api/user/order-detail?orderId=${orderId}`, {
-        method: 'GET',
-        credentials: 'include',
-      })
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.getOrder(orderId)
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.order) {
-          setSelectedOrder(data.order)
-        }
-      } else {
-        setError('Failed to load order details')
+      if (response.error) {
+        setError(response.error.message || 'Failed to load order details')
+      } else if (response.data && response.data.order_number) {
+        setSelectedOrder(response.data)
       }
     } catch (err) {
       console.error('[Orders] Error loading order detail:', err)

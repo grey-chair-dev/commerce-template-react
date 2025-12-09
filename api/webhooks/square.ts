@@ -93,6 +93,13 @@ async function refreshProductsCache(): Promise<void> {
  * Process new items and fetch Discogs data for music products
  */
 async function processNewItemsForDiscogs(event: any): Promise<void> {
+  // Check feature flag first - if disabled, skip all Discogs processing
+  const { isDiscogsEnabled } = require('../utils/featureFlags.js')
+  if (!isDiscogsEnabled()) {
+    console.log('[Webhook] Discogs feature is disabled, skipping Discogs fetch')
+    return
+  }
+
   const databaseUrl = process.env.DATABASE_URL
   const discogsToken = process.env.DISCOGS_USER_TOKEN
   const discogsUserAgent = process.env.DISCOGS_USER_AGENT || 'SpiralGroove/1.0'
@@ -161,6 +168,14 @@ async function processNewItemsForDiscogs(event: any): Promise<void> {
   }
 }
 
+// Vercel configuration to disable automatic body parsing
+// This is CRITICAL for webhook signature verification - we need the raw body
+export const config = {
+  api: {
+    bodyParser: false, // Disable automatic JSON parsing to get raw body for signature verification
+  },
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST requests (Square sends webhooks via POST)
   if (req.method !== 'POST') {
@@ -173,10 +188,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Get the raw body for signature verification
-  // Note: Vercel automatically parses JSON, so we reconstruct the raw body
-  const rawBody = typeof req.body === 'string' 
-    ? req.body 
-    : JSON.stringify(req.body)
+  // CRITICAL: We need the exact raw bytes that Square signed
+  let rawBody: string | null = null;
+  
+  // Strategy 1: Check if body is already a Buffer (bodyParser: false should provide this)
+  if (Buffer.isBuffer(req.body)) {
+    rawBody = req.body.toString('utf8');
+  }
+  // Strategy 2: Check if body is a string
+  else if (typeof req.body === 'string') {
+    rawBody = req.body;
+  }
+  // Strategy 3: Try to read from request stream
+  else if (!req.body || (req.body && typeof req.body === 'object' && Object.keys(req.body).length === 0)) {
+    // Read from stream (fallback)
+    rawBody = await new Promise<string | null>((resolve) => {
+      let body = Buffer.alloc(0);
+      let hasData = false;
+      
+      req.on('data', (chunk) => {
+        hasData = true;
+        body = Buffer.concat([body, Buffer.from(chunk)]);
+      });
+      
+      req.on('end', () => {
+        resolve(hasData ? body.toString('utf8') : null);
+      });
+      
+      req.on('error', () => resolve(null));
+      
+      setTimeout(() => {
+        if (!hasData) {
+          req.removeAllListeners();
+          resolve(null);
+        }
+      }, 10000);
+    });
+  }
+  
+  // Strategy 4: Body was parsed - cannot verify signature securely
+  if (!rawBody && req.body && typeof req.body === 'object') {
+    console.error('[Webhook] CRITICAL: Body was parsed by Vercel - signature verification cannot work securely');
+    console.error('[Webhook] This is a security issue - fix bodyParser: false in vercel.json');
+    
+    // In production, reject requests without raw body
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+      return res.status(500).json({
+        error: 'Server configuration error',
+        message: 'Cannot read raw request body for signature verification',
+      });
+    }
+    
+    // Development fallback (INSECURE)
+    rawBody = JSON.stringify(req.body, null, 0);
+    console.warn('[Webhook] DEVELOPMENT MODE: Using parsed body (INSECURE)');
+  }
+  
+  if (!rawBody) {
+    return res.status(400).json({ error: 'Missing request body' });
+  }
   
   // Verify webhook signature if key is configured
   const signature = req.headers['x-square-signature'] as string

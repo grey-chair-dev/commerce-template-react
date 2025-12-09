@@ -322,24 +322,26 @@ async function testOrderItems() {
   
   try {
     const orderIdentifier = orderId || orderNumber;
-    const response = await makeRequest(`${API_BASE_URL}/api/orders/${orderIdentifier}/items`, {
+    // Use the main order endpoint which includes items in the response
+    const response = await makeRequest(`${API_BASE_URL}/api/orders/${orderIdentifier}`, {
       method: 'GET',
     });
     
-    const items = await response.json();
+    const orderData = await response.json();
     
-    if (response.ok && Array.isArray(items)) {
+    if (response.ok && orderData.items && Array.isArray(orderData.items)) {
+      const items = orderData.items;
       console.log(`✅ Found ${items.length} order item(s)`);
       items.forEach((item, index) => {
         console.log(`   Item ${index + 1}:`);
-        console.log(`     Product: ${item.product_name || item.product_id}`);
+        console.log(`     Product: ${item.product_name || item.name || item.product_id}`);
         console.log(`     Quantity: ${item.quantity}`);
         console.log(`     Price: $${item.price}`);
-        console.log(`     Subtotal: $${item.subtotal}`);
+        console.log(`     Subtotal: $${item.subtotal || (item.price * item.quantity)}`);
       });
       return true;
     } else {
-      console.error('❌ Failed to fetch order items:', items);
+      console.error('❌ Failed to fetch order items:', orderData);
       return false;
     }
   } catch (error) {

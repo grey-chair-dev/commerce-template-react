@@ -8,10 +8,19 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { searchDiscogsReleases } from '../../src/services/discogsAdapter.js'
+import { isDiscogsEnabled } from '../utils/featureFlags.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  // Check feature flag - if disabled, return immediately
+  if (!isDiscogsEnabled()) {
+    return res.status(503).json({
+      error: 'Discogs feature is disabled',
+      message: 'The Discogs feature is currently disabled. Set FEATURE_FLAG_DISCOGS_ENABLED=true to enable.',
+    })
   }
 
   const productName = req.query.productName as string

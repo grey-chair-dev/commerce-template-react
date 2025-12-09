@@ -14,6 +14,8 @@
  *   GET /api/monitoring/square-health - Check status without alerts
  */
 
+import { sendSlackAlert } from '../utils/slackAlerter.js';
+
 /**
  * Fetch Square status from their status page
  * Square uses status.squareup.com for status updates
@@ -180,171 +182,41 @@ async function testSquareAPIs(squareClient) {
 
 /**
  * Send Slack alert for Square API issues
+ * Now uses centralized SlackAlerterService
  */
-async function sendSlackAlert(alertData) {
-  let webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  
-  // Try to load from .env.local if not found
-  if (!webhookUrl) {
-    try {
-      const { config } = await import('dotenv');
-      const { fileURLToPath } = await import('url');
-      const { dirname, join } = await import('path');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const result = config({ path: join(__dirname, '../../.env.local') });
-      if (result && !result.error) {
-        webhookUrl = process.env.SLACK_WEBHOOK_URL;
-      }
-    } catch (e) {
-      // dotenv not available
-    }
-  }
-  
-  if (!webhookUrl) {
-    console.warn('[Square Health] SLACK_WEBHOOK_URL not configured, skipping alert');
-    return false;
-  }
-  
-  // Strip quotes if present
-  webhookUrl = webhookUrl.trim().replace(/^["']|["']$/g, '');
-  
-  // Get base URL for links
+async function sendSquareHealthAlert(alertData) {
   const baseUrl = process.env.VERCEL_URL 
     ? `https://${process.env.VERCEL_URL}` 
     : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   
-  const priority = alertData.priority === 'critical' ? '🔴 CRITICAL' : 
-                   alertData.priority === 'major' ? '🟠 MAJOR' : '🟡 MINOR';
+  const recommendedAction = [
+    'PROACTIVE UPDATE: Immediately display a banner on your site informing customers of the issue (e.g., "Payments are temporarily disabled due to a service provider issue")',
+    'CHECK STATUS: View Square Status Page for current incidents',
+    'REVIEW LOGS: Check Vercel logs for /api/monitoring/square-health',
+    'VERIFY CREDENTIALS: Ensure SQUARE_ACCESS_TOKEN is valid',
+  ];
   
-  // Build incident details
-  let incidentText = '';
-  if (alertData.incidents && alertData.incidents.length > 0) {
-    incidentText = alertData.incidents.slice(0, 5).map((incident, i) => {
-      const name = incident.name || 'Unknown Incident';
-      const status = incident.status || 'investigating';
-      const impact = incident.impact || 'unknown';
-      return `${i + 1}. *${name}*\n   Status: ${status} | Impact: ${impact}`;
-    }).join('\n\n');
-    
-    if (alertData.incidents.length > 5) {
-      incidentText += `\n\n...and ${alertData.incidents.length - 5} more incidents`;
-    }
-  }
-  
-  // Build API test results
-  let apiTestText = '';
-  if (alertData.apiTests) {
-    const tests = alertData.apiTests;
-    apiTestText = `*Catalog API:* ${tests.catalog.success ? '✅' : '❌'} ${tests.catalog.error || 'OK'}\n` +
-                  `*Inventory API:* ${tests.inventory.success ? '✅' : '❌'} ${tests.inventory.error || 'OK'}\n` +
-                  `*Orders API:* ${tests.orders.success ? '✅' : '❌'} ${tests.orders.error || 'OK'}`;
-  }
-  
-  const message = {
-    text: `🚨 Square API Health Alert`,
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `🚨 Square API Health Alert`,
-          emoji: true,
+  return await sendSlackAlert({
+    priority: alertData.priority || 'medium',
+    route: '/api/monitoring/square-health',
+    title: 'Square API Health Alert',
+    message: alertData.message,
+    context: `*Status:* ${alertData.status}\n*Source:* ${alertData.source}`,
+    recommendedAction,
+    fields: {
+      'Status': alertData.status,
+      'Source': alertData.source,
         },
+    links: {
+      'Square Status Page': 'https://status.squareup.com',
+      'View Debug Info': `${baseUrl}/api/monitoring/debug`,
+      'Square Dashboard': 'https://developer.squareup.com/apps',
       },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Priority:*\n${priority}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Status:*\n${alertData.status}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Source:*\n${alertData.source}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Timestamp:*\n${new Date().toISOString()}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Alert:*\n${alertData.message}`,
-        },
-      },
-      ...(incidentText ? [{
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*📋 Relevant Incidents:*\n${incidentText}`,
-        },
-      }] : []),
-      ...(apiTestText ? [{
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*🧪 API Test Results:*\n${apiTestText}`,
-        },
-      }] : []),
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🚨 IMMEDIATE ACTION REQUIRED:*\n` +
-                  `1. *PROACTIVE UPDATE:* Immediately display a banner on your site informing customers of the issue (e.g., "Payments are temporarily disabled due to a service provider issue").\n` +
-                  `2. *CHECK STATUS:* <https://status.squareup.com|View Square Status Page>\n` +
-                  `3. *REVIEW LOGS:* Check Vercel logs for /api/monitoring/square-health\n` +
-                  `4. *VERIFY CREDENTIALS:* Ensure SQUARE_ACCESS_TOKEN is valid`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🔗 Quick Links:*\n` +
-                  `<https://status.squareup.com|Square Status Page>\n` +
-                  `<${baseUrl}/api/monitoring/debug|View Debug Info>\n` +
-                  `<https://developer.squareup.com/apps|Square Dashboard>`
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `Timestamp: ${new Date().toISOString()}`,
-          },
-        ],
-      },
-    ],
-  };
-  
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('[Square Health] Failed to send Slack alert:', error);
-    return false;
-  }
+    metadata: {
+      incidents: alertData.incidents,
+      apiTests: alertData.apiTests,
+    },
+  });
 }
 
 export default async function handler(req, res) {
@@ -473,7 +345,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && alerts.length > 0) {
       for (const alert of alerts) {
         alert.apiTests = apiTests; // Include API test results
-        await sendSlackAlert(alert);
+        await sendSquareHealthAlert(alert);
       }
     }
     

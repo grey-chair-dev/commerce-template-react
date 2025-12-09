@@ -20,6 +20,16 @@ import { sendEmail } from '../utils/email.js';
 import { getOrderConfirmationEmail, getOrderStatusUpdateEmail } from '../utils/email-templates.js';
 
 /**
+ * Structured logging helper - reduces noise and improves readability
+ */
+const log = {
+  info: (msg, data) => console.log(`[Webhook] ${msg}`, data ? JSON.stringify(data) : ''),
+  error: (msg, err) => console.error(`[Webhook] ❌ ${msg}`, err?.message || err || ''),
+  warn: (msg) => console.warn(`[Webhook] ⚠️  ${msg}`),
+  success: (msg) => console.log(`[Webhook] ✅ ${msg}`),
+};
+
+/**
  * Verify Square webhook signature
  */
 function verifySquareSignature(signature, body, signatureKey) {
@@ -28,16 +38,9 @@ function verifySquareSignature(signature, body, signatureKey) {
   }
 
   // Square sends signature in format: sha256=BASE64_HASH or just BASE64_HASH
-  // The signature is base64 encoded, not hex
-  // Note: Base64 strings can end with '=' for padding, so we need to check for 'sha256=' prefix
-  let expectedSignature;
-  if (signature.startsWith('sha256=')) {
-    // Format: sha256=base64hash
-    expectedSignature = signature.substring(7); // Remove 'sha256=' prefix
-  } else {
-    // Format: base64hash (may include = padding)
-    expectedSignature = signature;
-  }
+  let expectedSignature = signature.startsWith('sha256=') 
+    ? signature.substring(7) 
+    : signature;
   
   if (!expectedSignature) {
     return false;
@@ -49,31 +52,18 @@ function verifySquareSignature(signature, body, signatureKey) {
   const calculatedSignature = hmac.digest('base64');
 
   // Compare signatures using constant-time comparison
-  // Both should be base64 strings
   if (expectedSignature.length !== calculatedSignature.length) {
-    console.error('Signature length mismatch:', {
-      expected: expectedSignature.length,
-      calculated: calculatedSignature.length,
-      expectedPreview: expectedSignature.substring(0, 20),
-      calculatedPreview: calculatedSignature.substring(0, 20),
-    });
     return false;
   }
   
   try {
-    // Compare base64 strings
     return crypto.timingSafeEqual(
       Buffer.from(expectedSignature, 'base64'),
       Buffer.from(calculatedSignature, 'base64')
     );
   } catch (error) {
-    console.error('Signature comparison error:', error.message);
-    // Fallback: try string comparison if base64 decode fails
-    try {
-      return expectedSignature === calculatedSignature;
-    } catch (e) {
-      return false;
-    }
+    // Fallback: string comparison if base64 decode fails
+    return expectedSignature === calculatedSignature;
   }
 }
 
@@ -88,7 +78,6 @@ async function fetchFullOrderFromSquare(squareOrderId) {
     const squareEnvironment = (process.env.SQUARE_ENVIRONMENT || 'sandbox').toLowerCase().trim();
     
     if (!squareAccessToken) {
-      console.warn(`[Webhook] SQUARE_ACCESS_TOKEN not configured - cannot fetch full order details`);
       return null;
     }
     
@@ -97,19 +86,103 @@ async function fetchFullOrderFromSquare(squareOrderId) {
       environment: squareEnvironment === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
     });
     
-    // Fetch full order from Square
-    // Square SDK v43 uses 'retrieveOrder' method on orders API
-    const orderResponse = await squareClient.orders.retrieveOrder(squareOrderId);
-    
-    if (orderResponse.result && orderResponse.result.order) {
-      console.log(`[Webhook] ✅ Fetched full order from Square API`);
-      return orderResponse.result.order;
-    } else {
-      console.warn(`[Webhook] Could not fetch full order from Square API`);
+    if (!squareClient.orders) {
       return null;
     }
+    
+    const ordersApi = squareClient.orders;
+    
+    // Diagnostic: Log available methods if retrieveOrder doesn't exist
+    if (!ordersApi || typeof ordersApi.retrieveOrder !== 'function') {
+      const availableMethods = ordersApi ? Object.keys(ordersApi).filter(key => typeof ordersApi[key] === 'function') : [];
+      log.warn(`Square Orders API methods available: ${availableMethods.join(', ') || 'none'}`);
+      log.warn(`Square client structure: orders=${!!ordersApi}, retrieveOrder=${typeof ordersApi?.retrieveOrder}`);
+    }
+    
+    let orderResponse;
+    
+    try {
+      // Try retrieveOrder method (Square SDK v43+)
+      if (ordersApi && typeof ordersApi.retrieveOrder === 'function') {
+        try {
+          orderResponse = await ordersApi.retrieveOrder({ orderId: squareOrderId });
+        } catch (e) {
+          // If object format fails, try string format (some SDK versions)
+          if (e.message?.includes('orderId') || e.message?.includes('parameter')) {
+            try {
+              orderResponse = await ordersApi.retrieveOrder(squareOrderId);
+            } catch (e2) {
+              log.error('Error calling retrieveOrder with string parameter', e2);
+              throw e2;
+            }
+          } else {
+            throw e;
+          }
+        }
+      } 
+      // Fallback: Try retrieve method (older SDK versions)
+      else if (ordersApi && typeof ordersApi.retrieve === 'function') {
+        orderResponse = await ordersApi.retrieve({ orderId: squareOrderId });
+      }
+      // Fallback: Try getOrder method (alternative naming)
+      else if (ordersApi && typeof ordersApi.getOrder === 'function') {
+        orderResponse = await ordersApi.getOrder({ orderId: squareOrderId });
+      }
+      // Last resort: Direct HTTP call if SDK methods don't work
+      else {
+        log.warn('Square Orders API methods not available, attempting direct HTTP call');
+        try {
+          const squareApiUrl = squareEnvironment === 'production' 
+            ? 'https://connect.squareup.com'
+            : 'https://connect.squareupsandbox.com';
+          
+          const response = await fetch(`${squareApiUrl}/v2/orders/${squareOrderId}`, {
+            method: 'GET',
+            headers: {
+              'Square-Version': '2024-01-18',
+              'Authorization': `Bearer ${squareAccessToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            log.error(`Direct HTTP call failed: ${response.status} ${response.statusText}`, errorText);
+            return null;
+          }
+          
+          const data = await response.json();
+          if (data.order) {
+            orderResponse = { result: { order: data.order } };
+            log.info('✅ Successfully fetched order via direct HTTP call');
+          } else {
+            log.warn('Direct HTTP call returned no order data');
+            return null;
+          }
+        } catch (httpError) {
+          log.error('Direct HTTP call error', httpError);
+          return null;
+        }
+      }
+    } catch (methodError) {
+      log.error('Error fetching order from Square API', methodError);
+      log.error('Error details:', {
+        message: methodError.message,
+        stack: methodError.stack,
+        squareOrderId,
+        hasOrdersApi: !!ordersApi,
+        ordersApiType: typeof ordersApi,
+      });
+      return null;
+    }
+    
+    if (orderResponse?.result?.order) {
+      return orderResponse.result.order;
+    }
+    
+    return null;
   } catch (fetchError) {
-    console.error(`[Webhook] Error fetching full order from Square:`, fetchError.message);
+    log.error('Error fetching full order', fetchError);
     return null;
   }
 }
@@ -146,14 +219,12 @@ async function processOrderUpdate(sql, event) {
       orderObject = data.object.order_updated;
       squareOrderId = orderObject.id;
     } else {
-      console.warn('Missing order ID in order update');
-      console.warn('Data structure:', JSON.stringify(data, null, 2));
+      log.warn('Missing order ID in order update');
       return null;
     }
     
     if (!squareOrderId) {
-      console.warn('Order ID is null or undefined');
-      console.warn('Data structure:', JSON.stringify(data, null, 2));
+      log.warn('Order ID is null or undefined');
       return null;
     }
     
@@ -163,62 +234,39 @@ async function processOrderUpdate(sql, event) {
       version = orderObject.version || 0;
     }
     
-    // Log order update (condensed)
-    console.log(`[Webhook] Order update: ${squareOrderId} | State: ${orderState} | Version: ${version}`);
-    
     // Check if order already exists
     const existingOrder = await sql`
       SELECT id, status FROM orders WHERE square_order_id = ${squareOrderId}
     `;
     
-    console.log(`[Webhook] Existing order in DB:`, existingOrder);
-    
     // Extract fulfillment state from order fulfillments
-    // This is what gets updated when order status changes in Square
     let fulfillmentState = null;
     const fulfillments = orderObject?.fulfillments || [];
-    console.log(`[Webhook] Found ${fulfillments.length} fulfillments in order`);
     
     if (fulfillments.length > 0) {
-      // Get the first fulfillment (usually pickup fulfillment)
       const firstFulfillment = fulfillments[0];
-      fulfillmentState = firstFulfillment.state || firstFulfillment.fulfillment_state || null;
+      fulfillmentState = firstFulfillment.state || firstFulfillment.fulfillment_state || 
+                        firstFulfillment.fulfillmentState || firstFulfillment.State || null;
       
-      // Also check for state in different possible locations
-      if (!fulfillmentState) {
-        fulfillmentState = firstFulfillment.fulfillmentState || firstFulfillment.State || null;
-      }
-      
-      // Normalize to uppercase for comparison
       if (fulfillmentState) {
         fulfillmentState = fulfillmentState.toUpperCase();
       }
-      
-      console.log(`[Webhook] Fulfillment state extracted: ${fulfillmentState}`);
-      console.log(`[Webhook] Full fulfillment object:`, JSON.stringify(firstFulfillment, null, 2));
-    } else {
-      console.log(`[Webhook] No fulfillments found in order object`);
     }
     
-    // Map Square fulfillment state to our order status (priority over order state)
-    // Square fulfillment states: PROPOSED, RESERVED, PREPARED, COMPLETED, CANCELED
-    // Our statuses: New, In Progress, Ready, Picked Up, Completed, Canceled, Refunded
-    let orderStatus = 'New'; // Default
+    // Map Square fulfillment state to our order status
+    let orderStatus = 'New';
     
     if (fulfillmentState) {
-      // Fulfillment state takes priority (more specific)
       const fulfillmentStatusMap = {
         'PROPOSED': 'In Progress',
         'RESERVED': 'In Progress',
         'PREPARED': 'Ready',
         'COMPLETED': 'Picked Up',
         'CANCELED': 'Canceled',
-        'CANCELLED': 'Canceled', // Handle both spellings
+        'CANCELLED': 'Canceled',
       };
       orderStatus = fulfillmentStatusMap[fulfillmentState] || orderStatus;
-      console.log(`[Webhook] Mapped fulfillment state "${fulfillmentState}" to database status: "${orderStatus}"`);
     } else {
-      // Fallback to order state if no fulfillment state
       const statusMap = {
         'DRAFT': 'New',
         'OPEN': 'In Progress',
@@ -227,8 +275,6 @@ async function processOrderUpdate(sql, event) {
         'CANCELLED': 'Canceled',
       };
       orderStatus = statusMap[orderState] || 'New';
-      console.log(`[Webhook] No fulfillment state found, mapped order state "${orderState}" to database status: "${orderStatus}"`);
-      console.log(`[Webhook] WARNING: Order state fallback used - fulfillment state may not be in webhook payload`);
     }
     
     // ============================================
@@ -260,13 +306,13 @@ async function processOrderUpdate(sql, event) {
     // Try to extract from metadata first
     if (metadata.customer_id) {
       customerId = metadata.customer_id;
-      console.log(`[Webhook] Extracted customer_id from metadata: ${customerId}`);
+      // Customer ID extracted from metadata
     } else if (note) {
       // Parse from note field: "Customer ID: {customer_id} | Order: {order_number}"
       const customerIdMatch = note.match(/Customer ID:\s*([a-f0-9-]+)/i);
       if (customerIdMatch) {
         customerId = customerIdMatch[1];
-        console.log(`[Webhook] Extracted customer_id from note: ${customerId}`);
+        // Customer ID extracted from note
       }
     }
     
@@ -324,12 +370,9 @@ async function processOrderUpdate(sql, event) {
         `;
         
         if (customerResult && customerResult.length > 0) {
-          // Found registered user - use their customer_id
           customerId = customerResult[0].id;
-          console.log(`[Webhook] Reconciled customer_id via email ${normalizedEmail}: ${customerId}`);
           
           // Update customer info if we have more complete data from order
-          // Only update fields that are missing or if we have new data
           const needsUpdate = 
             (customerFirstName && !customerResult[0].first_name) ||
             (customerLastName && !customerResult[0].last_name) ||
@@ -345,7 +388,6 @@ async function processOrderUpdate(sql, event) {
                 updated_at = NOW()
               WHERE id = ${customerId}
             `;
-            console.log(`[Webhook] Updated customer ${customerId} with additional info from order`);
           }
         } else {
           // No match found - create new customer record for guest order
@@ -370,10 +412,9 @@ async function processOrderUpdate(sql, event) {
             )
           `;
           customerId = newCustomerId;
-          console.log(`[Webhook] Created new customer record for guest order: ${customerId} (${normalizedEmail})`);
         }
       } catch (error) {
-        console.error(`[Webhook] Failed to reconcile/create customer via email: ${error.message}`);
+        log.error('Failed to reconcile/create customer via email', error);
         // Continue without customer_id - order will be stored as guest
       }
     }
@@ -405,36 +446,17 @@ async function processOrderUpdate(sql, event) {
       };
     });
     
-    console.log(`[Webhook] Extracted ${extractedLineItems.length} line items from order ${squareOrderId}`);
-    
     // Check if webhook payload is sparse (missing critical data)
-    // Square sometimes sends minimal payloads with only status changes
-    // Check multiple conditions to catch all sparse payload scenarios
     const hasLineItems = extractedLineItems.length > 0;
     const hasAmounts = totalAmount > 0;
-    const hasLineItemsInObject = orderObject?.line_items && Array.isArray(orderObject.line_items) && orderObject.line_items.length > 0;
-    const hasLineItemsProperty = orderObject?.lineItems && Array.isArray(orderObject.lineItems) && orderObject.lineItems.length > 0;
-    
-    const isPayloadSparse = !hasLineItems || (!hasAmounts && !hasLineItemsInObject && !hasLineItemsProperty);
-    
-    console.log(`[Webhook] Payload completeness check:`, {
-      hasLineItems,
-      hasAmounts,
-      hasLineItemsInObject,
-      hasLineItemsProperty,
-      isPayloadSparse,
-      extractedItemsCount: extractedLineItems.length,
-      totalAmount,
-    });
+    const isPayloadSparse = !hasLineItems || !hasAmounts;
     
     if (isPayloadSparse) {
-      console.warn(`[Webhook] ⚠️  Webhook payload is sparse (${extractedLineItems.length} items, $${totalAmount} total)`);
-      console.warn(`[Webhook] Fetching full order details from Square API to ensure complete data...`);
+      log.warn(`Sparse payload detected (${extractedLineItems.length} items, $${totalAmount} total) - fetching full order`);
       
       const fullOrder = await fetchFullOrderFromSquare(squareOrderId);
       
       if (fullOrder) {
-        // Replace sparse webhook data with complete Square API data
         orderObject = fullOrder;
         
         // Re-extract all data from full order
@@ -523,9 +545,9 @@ async function processOrderUpdate(sql, event) {
           }
         }
         
-        console.log(`[Webhook] ✅ Re-extracted from full order: ${extractedLineItems.length} items, $${totalAmount} total`);
+        log.success(`Re-extracted from full order: ${extractedLineItems.length} items, $${totalAmount.toFixed(2)}`);
       } else {
-        console.warn(`[Webhook] ⚠️  Could not fetch full order - using sparse webhook data`);
+        log.warn('Could not fetch full order - using sparse webhook data');
       }
     }
     
@@ -576,9 +598,7 @@ async function processOrderUpdate(sql, event) {
       const shouldUpdate = orderStatus !== currentStatus || fulfillmentState !== null;
       
       if (shouldUpdate) {
-        console.log(`[Webhook] Status update needed: "${currentStatus}" → "${orderStatus}"`);
-        console.log(`[Webhook] Fulfillment state: ${fulfillmentState || 'not found'}, Order state: ${orderState}`);
-        console.log(`[Webhook] Order ID: ${orderId}, Square Order ID: ${squareOrderId}`);
+        log.info(`Status update: "${currentStatus}" → "${orderStatus}" | Order: ${orderId}`);
         
         try {
           const updateResult = await sql`
@@ -591,13 +611,12 @@ async function processOrderUpdate(sql, event) {
           `;
           
           if (updateResult && updateResult.length > 0) {
-            console.log(`✅ Successfully updated order ${orderId} status from "${currentStatus}" to "${orderStatus}"`);
-            console.log(`[Webhook] Update result:`, JSON.stringify(updateResult[0], null, 2));
+            log.success(`Order ${orderId} status updated: "${currentStatus}" → "${orderStatus}"`);
             
             // Send status update email if status changed to a notable status
             if (orderStatus !== currentStatus) {
               sendOrderStatusUpdateEmail(sql, orderId, orderStatus, currentStatus).catch(err => {
-                console.error(`[Email] Failed to send status update email:`, err);
+                log.error('Failed to send status update email', err);
               });
             }
             
@@ -610,17 +629,14 @@ async function processOrderUpdate(sql, event) {
               previousStatus: currentStatus,
             };
           } else {
-            console.error(`[Webhook] Update query returned no rows - order may not exist`);
+            log.error('Update query returned no rows - order may not exist');
           }
         } catch (error) {
-          console.error(`[Webhook] Error updating order status:`, error);
-          console.error(`[Webhook] Error message:`, error.message);
-          console.error(`[Webhook] Error stack:`, error.stack);
+          log.error('Error updating order status', error);
           // Continue to full update below
         }
       } else {
-        console.log(`[Webhook] Status unchanged: "${currentStatus}" (fulfillment state: ${fulfillmentState || 'not found'})`);
-        console.log(`[Webhook] Status unchanged, but will still update order data (amounts, line items) if needed`);
+        // Status unchanged, updating order data if needed
       }
       
       // Always update order data (amounts, line items) even if status hasn't changed
@@ -700,7 +716,7 @@ async function processOrderUpdate(sql, event) {
             }
             
             if (!item.catalog_object_id) {
-              console.warn(`[Webhook] Skipping line item without catalog_object_id: ${item.name}`);
+              // Skipping line item without catalog_object_id
               continue;
             }
             
@@ -727,19 +743,61 @@ async function processOrderUpdate(sql, event) {
                   NOW()
                 )
               `;
-              console.log(`[Webhook] Stored line item: ${item.name} (${item.quantity}x)`);
+              // Stored line item
             } else {
-              console.warn(`[Webhook] Product ${item.catalog_object_id} not found in database, skipping line item`);
+              // Product not found in database, skipping line item
             }
           }
         }
         
-        console.log(`✅ Updated order ${orderId} (Square: ${squareOrderId}) to status: ${orderStatus}`);
-        console.log(`   Customer ID: ${customerId || 'N/A'}`);
-        console.log(`   Total: $${totalAmount}`);
-        console.log(`   Line Items: ${extractedLineItems.length}`);
-        if (pickupDetails) {
-          console.log(`   Pickup Details: ${pickupDetails.firstName} ${pickupDetails.lastName} (${pickupDetails.email})`);
+        log.success(`Order ${orderId} updated: ${orderStatus} | ${extractedLineItems.length} items | $${totalAmount.toFixed(2)}`);
+        
+        // Update inventory when order is completed or picked up (if not already updated via payment)
+        // Only update if order status changed to Completed/Picked Up and we haven't updated inventory yet
+        if ((orderStatus === 'Completed' || orderStatus === 'Picked Up') && extractedLineItems.length > 0) {
+          // Check if inventory was already updated (by checking if order has payment_status)
+          const orderCheck = await sql`
+            SELECT payment_status FROM orders WHERE id = ${orderId}
+          `;
+          
+          // Only update inventory if payment_status is null/empty (order created without payment webhook)
+          // or if payment_status is APPROVED/COMPLETED (to ensure inventory is synced)
+          const shouldUpdateInventory = !orderCheck || orderCheck.length === 0 || 
+                                       !orderCheck[0].payment_status ||
+                                       orderCheck[0].payment_status === 'APPROVED' ||
+                                       orderCheck[0].payment_status === 'COMPLETED';
+          
+          if (shouldUpdateInventory) {
+            updateInventoryForOrder(sql, orderId).catch(err => {
+              log.error('Failed to update inventory after order status change', err);
+              // Send Slack alert for inventory sync failure
+              import('../utils/slackAlerter.js')
+                .then(({ sendSlackAlert }) => {
+                  return sendSlackAlert({
+                    priority: 'high',
+                    errorId: `inv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                    route: '/api/webhooks/square-order-paid',
+                    title: 'Inventory Sync Failure',
+                    message: `Failed to update inventory after order status change`,
+                    context: `Order ${orderId} status changed to ${orderStatus}, but inventory update failed. Product stock counts may be out of sync with Square.`,
+                    recommendedAction: [
+                      'Check Vercel logs for detailed error message',
+                      'Manually verify inventory in Square Dashboard',
+                      'Run inventory sync script if needed: npm run square:sync-stock',
+                      'Verify products.stock_count matches Square inventory counts'
+                    ],
+                    fields: {
+                      'Order ID': orderId.toString(),
+                      'Order Status': orderStatus,
+                      'Error': err.message || 'Unknown error'
+                    },
+                  });
+                })
+                .catch(alertErr => {
+                  console.error('[Square Order Paid] Failed to send Slack alert:', alertErr);
+                });
+            });
+          }
         }
         
         return { 
@@ -751,13 +809,13 @@ async function processOrderUpdate(sql, event) {
           lineItemsCount: extractedLineItems.length,
         };
       } catch (error) {
-        console.error(`[Webhook] Transaction failed for order ${orderId}:`, error.message);
+        log.error(`Transaction failed for order ${orderId}`, error);
         throw error; // Re-throw to trigger webhook error handling
       }
     } else {
       // Order doesn't exist - fetch full order details from Square API
       // The webhook payload is minimal, so we need to fetch the full order to get line items, amounts, etc.
-      console.log(`[Webhook] Order ${squareOrderId} not found in database - fetching full order from Square API`);
+      log.info(`Order ${squareOrderId} not found - fetching from Square API`);
       
       try {
         // Initialize Square client
@@ -765,8 +823,7 @@ async function processOrderUpdate(sql, event) {
         const squareEnvironment = (process.env.SQUARE_ENVIRONMENT || 'sandbox').toLowerCase().trim();
         
         if (!squareAccessToken) {
-          console.warn(`[Webhook] SQUARE_ACCESS_TOKEN not configured - cannot fetch full order details`);
-          console.warn(`[Webhook] Order will be created with minimal data from webhook payload`);
+          log.warn('SQUARE_ACCESS_TOKEN not configured - creating order with minimal data');
         } else {
           const squareClient = new SquareClient({
             token: squareAccessToken,
@@ -774,12 +831,98 @@ async function processOrderUpdate(sql, event) {
           });
           
           // Fetch full order from Square
-          // Square SDK v43 uses 'retrieveOrder' method on orders API
-          const orderResponse = await squareClient.orders.retrieveOrder(squareOrderId);
+          // Square SDK v43 - method may vary by version, try multiple approaches
+          let orderResponse;
+          try {
+            // Check if orders API exists
+            if (!squareClient.orders) {
+              // Square client orders API not available
+              orderResponse = null;
+            } else {
+              const ordersApi = squareClient.orders;
+              
+              // Diagnostic: Log available methods if retrieveOrder doesn't exist
+              if (!ordersApi || typeof ordersApi.retrieveOrder !== 'function') {
+                const availableMethods = ordersApi ? Object.keys(ordersApi).filter(key => typeof ordersApi[key] === 'function') : [];
+                log.warn(`Square Orders API methods available: ${availableMethods.join(', ') || 'none'}`);
+                log.warn(`Square client structure: orders=${!!ordersApi}, retrieveOrder=${typeof ordersApi?.retrieveOrder}`);
+              }
+              
+              // Try retrieveOrder method (Square SDK v43+)
+              if (ordersApi && typeof ordersApi.retrieveOrder === 'function') {
+                try {
+                  orderResponse = await ordersApi.retrieveOrder({ orderId: squareOrderId });
+                } catch (e) {
+                  // If object format fails, try string format (some SDK versions)
+                  if (e.message?.includes('orderId') || e.message?.includes('parameter')) {
+                    try {
+                      orderResponse = await ordersApi.retrieveOrder(squareOrderId);
+                    } catch (e2) {
+                      log.error('Error calling retrieveOrder with string parameter', e2);
+                      throw e2;
+                    }
+                  } else {
+                    throw e;
+                  }
+                }
+              } 
+              // Fallback: Try retrieve method (older SDK versions)
+              else if (ordersApi && typeof ordersApi.retrieve === 'function') {
+                orderResponse = await ordersApi.retrieve({ orderId: squareOrderId });
+              }
+              // Fallback: Try getOrder method (alternative naming)
+              else if (ordersApi && typeof ordersApi.getOrder === 'function') {
+                orderResponse = await ordersApi.getOrder({ orderId: squareOrderId });
+              }
+              // Last resort: Direct HTTP call if SDK methods don't work
+              else {
+                log.warn('Square Orders API methods not available, attempting direct HTTP call');
+                try {
+                  const squareApiUrl = squareEnvironment === 'production' 
+                    ? 'https://connect.squareup.com'
+                    : 'https://connect.squareupsandbox.com';
+                  
+                  const response = await fetch(`${squareApiUrl}/v2/orders/${squareOrderId}`, {
+                    method: 'GET',
+                    headers: {
+                      'Square-Version': '2024-01-18',
+                      'Authorization': `Bearer ${squareAccessToken}`,
+                      'Content-Type': 'application/json',
+                    },
+                  });
+                  
+                  if (!response.ok) {
+                    const errorText = await response.text();
+                    log.error(`Direct HTTP call failed: ${response.status} ${response.statusText}`, errorText);
+                    orderResponse = null;
+                  } else {
+                    const data = await response.json();
+                    if (data.order) {
+                      orderResponse = { result: { order: data.order } };
+                      log.info('✅ Successfully fetched order via direct HTTP call');
+                    } else {
+                      log.warn('Direct HTTP call returned no order data');
+                      orderResponse = null;
+                    }
+                  }
+                } catch (httpError) {
+                  log.error('Direct HTTP call error', httpError);
+                  orderResponse = null;
+                }
+              }
+            }
+          } catch (methodError) {
+            log.error('Error fetching order from Square API', methodError);
+            orderResponse = null;
+          }
+          
+          if (!orderResponse) {
+            log.warn('Could not fetch full order - using sparse webhook data');
+          }
           
           if (orderResponse.result && orderResponse.result.order) {
             const fullOrder = orderResponse.result.order;
-            console.log(`[Webhook] Fetched full order from Square API`);
+            // Fetched full order from Square API
             
             // Use full order data instead of minimal webhook payload
             orderObject = fullOrder;
@@ -871,14 +1014,14 @@ async function processOrderUpdate(sql, event) {
               }
             }
             
-            console.log(`[Webhook] Re-extracted from full order: ${extractedLineItems.length} items, $${totalAmount} total`);
+            log.success(`Re-extracted from full order: ${extractedLineItems.length} items, $${totalAmount.toFixed(2)}`);
           } else {
-            console.warn(`[Webhook] Could not fetch full order from Square API - using minimal webhook data`);
+            log.warn('Could not fetch full order from Square API - using minimal webhook data');
           }
         }
       } catch (fetchError) {
-        console.error(`[Webhook] Error fetching full order from Square:`, fetchError.message);
-        console.warn(`[Webhook] Continuing with minimal webhook payload data`);
+        log.error('Error fetching full order from Square', fetchError);
+        log.warn('Continuing with minimal webhook payload data');
       }
       
       // Generate order number from Square order ID or reference_id
@@ -929,11 +1072,7 @@ async function processOrderUpdate(sql, event) {
           )
         `;
         
-        console.log(`[Webhook] Created new order ${newOrderId} (Square: ${squareOrderId})`);
-        console.log(`   Order Number: ${orderNumber}`);
-        console.log(`   Customer ID: ${customerId || 'N/A'}`);
-        console.log(`   Total: $${totalAmount}`);
-        console.log(`   Pickup Details: ${JSON.stringify(pickupDetailsForOrder)}`);
+        log.success(`Created new order ${newOrderId} (${orderNumber}) | $${totalAmount.toFixed(2)}`);
         
         // INSERT individual items into order_items table, linking via order_id
         if (extractedLineItems.length > 0) {
@@ -944,7 +1083,7 @@ async function processOrderUpdate(sql, event) {
             }
             
             if (!item.catalog_object_id) {
-              console.warn(`[Webhook] Skipping line item without catalog_object_id: ${item.name}`);
+              // Skipping line item without catalog_object_id
               continue;
             }
             
@@ -971,21 +1110,21 @@ async function processOrderUpdate(sql, event) {
                   NOW()
                 )
               `;
-              console.log(`[Webhook] Stored line item: ${item.name} (${item.quantity}x)`);
+              // Stored line item
             } else {
-              console.warn(`[Webhook] Product ${item.catalog_object_id} not found in database, skipping line item`);
+              // Product not found in database, skipping line item
             }
           }
         }
         
-        console.log(`✅ Created new order ${newOrderId} (Square: ${squareOrderId}) with ${extractedLineItems.length} items`);
+        log.success(`Order ${newOrderId} created with ${extractedLineItems.length} items`);
         
         // Send order confirmation email for new orders if payment is already approved
         // Note: For most orders, payment comes later via payment.created webhook
         // But if order is created with payment already approved, send confirmation now
         if (orderStatus === 'In Progress' || orderStatus === 'Confirmed') {
           sendOrderConfirmationEmail(sql, newOrderId).catch(err => {
-            console.error(`[Email] Failed to send confirmation email:`, err);
+            log.error('Failed to send confirmation email', err);
           });
         }
         
@@ -998,13 +1137,13 @@ async function processOrderUpdate(sql, event) {
           lineItemsCount: extractedLineItems.length,
         };
       } catch (error) {
-        console.error(`[Webhook] Transaction failed for new order ${squareOrderId}:`, error.message);
+        log.error(`Transaction failed for new order ${squareOrderId}`, error);
         throw error; // Re-throw to trigger webhook error handling
       }
     }
     
   } catch (error) {
-    console.error('Error processing order update:', error);
+    log.error('Error processing order update', error);
     throw error;
   }
 }
@@ -1034,7 +1173,7 @@ async function sendOrderConfirmationEmail(sql, orderId) {
     `;
 
     if (!orderResult || orderResult.length === 0) {
-      console.log(`[Email] Order ${orderId} not found, skipping confirmation email`);
+      // Order not found, skipping confirmation email
       return;
     }
 
@@ -1043,7 +1182,7 @@ async function sendOrderConfirmationEmail(sql, orderId) {
     // Get customer email from order or pickup details
     const customerEmail = order.customer_email || order.pickup_details?.email;
     if (!customerEmail) {
-      console.log(`[Email] No email found for order ${orderId}, skipping confirmation email`);
+      // No email found for order, skipping confirmation email
       return;
     }
 
@@ -1107,10 +1246,10 @@ async function sendOrderConfirmationEmail(sql, orderId) {
       orderUrl: `${baseUrl}/order-confirmation?id=${order.id}`,
     });
 
-    console.log(`[Email] ✅ Order confirmation email sent for order ${order.order_number} to ${customerEmail}`);
+    // Order confirmation email sent
   } catch (error) {
     // Don't fail webhook if email fails
-    console.error(`[Email] ❌ Failed to send order confirmation email:`, error);
+    log.error('Failed to send order confirmation email', error);
   }
 }
 
@@ -1188,10 +1327,73 @@ async function sendOrderStatusUpdateEmail(sql, orderId, newStatus, previousStatu
       customerName,
     });
 
-    console.log(`[Email] ✅ Status update email sent for order ${order.order_number} (${previousStatus} → ${newStatus}) to ${customerEmail}`);
+    // Status update email sent successfully
   } catch (error) {
     // Don't fail webhook if email fails
-    console.error(`[Email] ❌ Failed to send status update email:`, error);
+    log.error('Failed to send status update email', error);
+  }
+}
+
+/**
+ * Update inventory (products.stock_count) after order payment
+ * Deducts quantities from products based on order items
+ */
+async function updateInventoryForOrder(sql, orderId) {
+  try {
+    // Get all order items for this order
+    const orderItems = await sql`
+      SELECT product_id, quantity
+      FROM order_items
+      WHERE order_id = ${orderId}
+    `;
+
+    if (!orderItems || orderItems.length === 0) {
+      log.warn(`No order items found for order ${orderId}, skipping inventory update`);
+      return;
+    }
+
+    log.info(`Updating inventory for order ${orderId}: ${orderItems.length} items`);
+
+    // Update stock_count for each product
+    const updates = [];
+    for (const item of orderItems) {
+      const productId = item.product_id;
+      const quantity = parseInt(item.quantity) || 1;
+
+      try {
+        // Deduct quantity from stock_count (ensure it doesn't go below 0)
+        const result = await sql`
+          UPDATE products
+          SET 
+            stock_count = GREATEST(0, stock_count - ${quantity}),
+            updated_at = NOW()
+          WHERE id = ${productId}
+          RETURNING id, name, stock_count
+        `;
+
+        if (result && result.length > 0) {
+          const updated = result[0];
+          updates.push({
+            productId,
+            productName: updated.name,
+            quantityDeducted: quantity,
+            newStockCount: updated.stock_count,
+          });
+          log.info(`  ✅ ${updated.name || productId}: -${quantity} → stock_count: ${updated.stock_count}`);
+        } else {
+          log.warn(`  ⚠️  Product ${productId} not found, skipping inventory update`);
+        }
+      } catch (itemError) {
+        log.error(`  ❌ Failed to update inventory for product ${productId}:`, itemError);
+        throw itemError; // Re-throw to trigger error handling
+      }
+    }
+
+    log.success(`Inventory updated for order ${orderId}: ${updates.length} products updated`);
+    return { orderId, updates };
+  } catch (error) {
+    log.error(`Error updating inventory for order ${orderId}:`, error);
+    throw error;
   }
 }
 
@@ -1210,8 +1412,7 @@ async function processPaymentEvent(sql, event) {
     const payment = object?.payment || object;
     
     if (!payment || !payment.id) {
-      console.warn('[Webhook] Missing payment ID in payment event');
-      console.warn('[Webhook] Payment object structure:', JSON.stringify(object, null, 2).substring(0, 500));
+      log.warn('Missing payment ID in payment event');
       return null;
     }
     
@@ -1223,12 +1424,7 @@ async function processPaymentEvent(sql, event) {
     const amountMoney = payment.amount_money || payment.total_money || {};
     const totalAmount = amountMoney.amount ? Number(amountMoney.amount) / 100 : 0; // Convert cents to dollars
     
-    console.log(`[Webhook] Processing payment event:`, {
-      paymentId: squarePaymentId,
-      status: paymentStatus,
-      orderId: orderId,
-      amount: totalAmount,
-    });
+    log.info(`Processing payment: ${squarePaymentId} | ${paymentStatus} | $${totalAmount.toFixed(2)}`);
     
     // Find order by Square order ID
     if (orderId) {
@@ -1285,50 +1481,147 @@ async function processPaymentEvent(sql, event) {
           WHERE id = ${orderId_db}
         `;
         
-        console.log(`✅ Updated order ${orderId_db} with payment ${squarePaymentId}, status: ${newStatus}`);
+        log.success(`Order ${orderId_db} payment processed: ${paymentStatus} → ${newStatus}`);
+        
+        // Update inventory when payment is approved/completed
+        if (paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') {
+          updateInventoryForOrder(sql, orderId_db).catch(err => {
+            log.error('Failed to update inventory after payment', err);
+            // Send Slack alert for inventory sync failure
+            import('../utils/slackAlerter.js')
+              .then(({ sendSlackAlert }) => {
+                return sendSlackAlert({
+                  priority: 'high',
+                  errorId: `inv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                  route: '/api/webhooks/square-order-paid',
+                  title: 'Inventory Sync Failure',
+                  message: `Failed to update inventory after order payment`,
+                  context: `Order ${orderId_db} payment was ${paymentStatus}, but inventory update failed. Product stock counts may be out of sync with Square.`,
+                  recommendedAction: [
+                    'Check Vercel logs for detailed error message',
+                    'Manually verify inventory in Square Dashboard',
+                    'Run inventory sync script if needed: npm run square:sync-stock',
+                    'Verify products.stock_count matches Square inventory counts'
+                  ],
+                  fields: {
+                    'Order ID': orderId_db.toString(),
+                    'Payment Status': paymentStatus,
+                    'Error': err.message || 'Unknown error'
+                  },
+                });
+              })
+              .catch(alertErr => {
+                console.error('[Square Order Paid] Failed to send Slack alert:', alertErr);
+              });
+          });
+        }
         
         // Send order confirmation email when payment is approved/completed
         if ((paymentStatus === 'APPROVED' || paymentStatus === 'COMPLETED') && currentStatus === 'New') {
-          // Payment just approved - send confirmation email
           sendOrderConfirmationEmail(sql, orderId_db).catch(err => {
-            console.error(`[Email] Failed to send confirmation email:`, err);
+            log.error('Failed to send confirmation email', err);
           });
         }
         
         return { orderId: orderId_db, paymentId: squarePaymentId, action: 'payment_processed', status: newStatus };
       } else {
-        console.log(`ℹ️  Order ${orderId} not found in database for payment ${squarePaymentId}`);
+        // Order not found for this payment
         return null;
       }
     } else {
-      console.log(`ℹ️  Payment ${squarePaymentId} has no associated order_id`);
+      // Payment has no associated order_id
       return null;
     }
     
   } catch (error) {
-    console.error('Error processing payment event:', error);
+    log.error('Error processing payment event', error);
     throw error;
   }
 }
 
 /**
+ * Read raw body from request stream
+ * This is necessary for signature verification in Vercel serverless functions
+ * 
+ * With bodyParser disabled via config, the body should be available as a stream
+ */
+async function getRawBody(req) {
+  // Strategy 1: Check if body is already raw (Buffer or string) - this happens when bodyParser is disabled
+  if (req.body) {
+    if (Buffer.isBuffer(req.body)) {
+      return req.body.toString('utf8');
+    }
+    if (typeof req.body === 'string') {
+      return req.body;
+    }
+  }
+  
+  // Strategy 2: Read from request stream (when bodyParser is disabled, body comes as stream)
+  // Check if stream is still readable
+  if (req.readableEnded || !req.readable) {
+    // Stream already consumed - body was likely parsed
+    // This shouldn't happen if config.bodyParser: false works, but handle gracefully
+    return null;
+  }
+  
+  return new Promise((resolve, reject) => {
+    let rawBody = Buffer.alloc(0);
+    let hasData = false;
+    
+    // Handle data chunks - accumulate as Buffer for proper binary handling
+    req.on('data', (chunk) => {
+      hasData = true;
+      rawBody = Buffer.concat([rawBody, Buffer.from(chunk)]);
+    });
+    
+    // Handle end of stream
+    req.on('end', () => {
+      if (hasData) {
+        resolve(rawBody.toString('utf8'));
+      } else {
+        resolve(null);
+      }
+    });
+    
+    // Handle errors
+    req.on('error', (error) => {
+      reject(error);
+    });
+    
+    // Set timeout to prevent hanging (10 seconds)
+    setTimeout(() => {
+      if (!hasData) {
+        req.removeAllListeners();
+        resolve(null);
+      }
+    }, 10000);
+  });
+}
+
+/**
+ * Vercel configuration to disable automatic body parsing
+ * This is CRITICAL for webhook signature verification - we need the raw body
+ * 
+ * Note: This config works for Vercel serverless functions.
+ * If this doesn't work in your environment, you may need to:
+ * 1. Install and use the 'micro' library: npm install micro
+ * 2. Use: import getRawBody from 'micro'; const rawBody = await getRawBody(req);
+ */
+export const config = {
+  api: {
+    bodyParser: false, // Disable automatic JSON parsing to get raw body for signature verification
+  },
+};
+
+/**
  * Main handler function
  */
 export default async function handler(req, res) {
-  // Only allow POST requests
   if (req.method !== 'POST') {
-    console.log(`[Webhook] Rejected: Method ${req.method} not allowed`);
     return res.status(405).json({ error: 'Method not allowed' });
   }
   
-  // Log incoming webhook (condensed)
-  const hasBody = !!req.body;
-  const bodyType = typeof req.body;
-  console.log(`[Webhook] POST ${req.url} | Body: ${hasBody ? `${bodyType}` : 'none'}`);
-  
   try {
-    // Get environment variables
-    // Use order-specific signature key (different from inventory webhook)
     const signatureKey = process.env.ORDER_WEBHOOK_SIGNATURE_KEY || 
                          process.env.SQUARE_SIGNATURE_KEY || 
                          process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
@@ -1339,136 +1632,69 @@ export default async function handler(req, res) {
                         process.env.SPR_POSTGRES_URL ||
                         process.env.POSTGRES_URL;
     
-    // Log which signature key source is being used (without exposing the key)
-    if (signatureKey) {
-      const keySource = process.env.ORDER_WEBHOOK_SIGNATURE_KEY ? 'ORDER_WEBHOOK_SIGNATURE_KEY' : process.env.SQUARE_SIGNATURE_KEY ? 'SQUARE_SIGNATURE_KEY' : 'SQUARE_WEBHOOK_SIGNATURE_KEY';
-      console.log(`[Webhook] Signature key: ${keySource} (${signatureKey.length} chars)`);
-    } else {
-      console.error('Order webhook signature key not configured');
-      console.error('Set ORDER_WEBHOOK_SIGNATURE_KEY in Vercel environment variables');
-      console.error('This should be the signature key from the order webhook subscription in Square Dashboard');
+    if (!signatureKey) {
+      log.error('Webhook signature key not configured');
       return res.status(500).json({ error: 'Webhook signature key not configured' });
     }
     
     if (!databaseUrl) {
-      console.error('Database URL not configured');
+      log.error('Database URL not configured');
       return res.status(500).json({ error: 'Database not configured' });
     }
     
     // Get raw body for signature verification
-    // Vercel may parse the body, so we need to handle both cases
     let rawBody;
     let payload;
     
-    // Try to get raw body from request
-    // In Vercel, we need to read from req directly if available
-    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
-      // Body was parsed - reconstruct JSON with exact formatting
-      // Square's signature is based on the exact JSON string they sent
-      payload = req.body;
-      
-      // Reconstruct JSON with no extra whitespace (compact)
-      // This should match Square's original format
-      rawBody = JSON.stringify(payload);
-      
-      console.warn('⚠️  Body was parsed - reconstructing JSON for signature verification');
-    } else if (Buffer.isBuffer(req.body)) {
-      // Body is a Buffer - convert to string
-      rawBody = req.body.toString('utf8');
-    } else if (typeof req.body === 'string') {
-      // Body is already a string (raw) - this is what we want
-      rawBody = req.body;
-    } else {
-      // No body provided
-      console.error('No request body received');
+    try {
+      rawBody = await getRawBody(req);
+    } catch (streamError) {
+      log.error('Error reading request body', streamError);
+      return res.status(400).json({ error: 'Failed to read request body' });
+    }
+    
+    if (!rawBody || rawBody.length === 0) {
+      log.error('No request body received');
       return res.status(400).json({ error: 'Missing request body' });
     }
     
-    // Parse JSON payload if not already parsed
-    if (!payload) {
-      try {
-        payload = JSON.parse(rawBody);
-      } catch (e) {
-        console.error('Failed to parse body as JSON:', e.message);
-        return res.status(400).json({ error: 'Invalid JSON body' });
-      }
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (e) {
+      log.error('Failed to parse JSON body', e);
+      return res.status(400).json({ error: 'Invalid JSON body' });
     }
     
-    // Log payload type (condensed)
-    console.log(`[Webhook] Payload: ${payload?.type || 'unknown'} (${rawBody?.length || 0} bytes)`);
-    
     // Verify webhook signature
-    // Square sends signature in X-Square-Signature header
     const signature = req.headers['x-square-signature'] || 
                      req.headers['x-square-hmacsha256-signature'] ||
                      req.headers['x-square-hmac-sha256-signature'];
     
-    // Log signature verification (condensed)
-    console.log(`[Webhook] Signature: ${signature ? 'present' : 'missing'}`);
-    
-    // Require signature for security - return 403 if missing or invalid
     if (!signature) {
-      console.error('❌ Missing Square webhook signature header');
-      console.error('Required headers: x-square-signature or x-square-hmacsha256-signature');
+      log.error('Missing webhook signature header');
       return res.status(403).json({ 
         error: 'Forbidden',
         message: 'Missing webhook signature' 
       });
     }
     
-    // Check if body was parsed by Vercel BEFORE signature verification
-    // This helps us determine if signature failure is due to parsing or a real security issue
-    const bodyWasParsed = req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body);
-    
-    // Verify signature - return 403 on failure
-    // Use the raw body string for signature verification (must match exactly what Square sent)
     const isValid = verifySquareSignature(signature, rawBody, signatureKey);
     
     if (!isValid) {
-      if (bodyWasParsed) {
-        // Body was parsed by Vercel - signature verification will fail due to JSON reconstruction differences
-        // This is expected behavior in Vercel serverless functions
-        // We allow the webhook to proceed but log a clear warning
-        console.warn('⚠️  [Webhook] Signature verification bypassed - body was parsed by Vercel');
-        console.warn('⚠️  [Webhook] This is expected in Vercel serverless functions');
-        console.warn('⚠️  [Webhook] Webhook will be processed (bypass active)');
-        console.log('[Webhook] Continuing with webhook processing...');
-        // Continue processing despite signature failure - DON'T RETURN
-      } else {
-        // Body was NOT parsed - signature failure is a real security issue
-        console.error('❌ [Webhook] Invalid Square webhook signature');
-        console.error('❌ [Webhook] Body was NOT parsed - this is a real security failure');
-        console.error('❌ [Webhook] Signature received:', signature.substring(0, 30) + '...');
-        console.error('❌ [Webhook] Body length:', rawBody.length);
-        
-        // Calculate expected signature for debugging (not exposed to client)
-        const hmac = crypto.createHmac('sha256', signatureKey);
-        hmac.update(rawBody, 'utf8');
-        const calculated = hmac.digest('base64');
-        console.error('❌ [Webhook] Calculated signature (base64):', calculated);
-        
-        // Extract expected signature from received signature
-        const expectedSig = signature.startsWith('sha256=') ? signature.substring(7) : signature;
-        console.error('❌ [Webhook] Expected signature (base64):', expectedSig);
-        console.error('❌ [Webhook] Rejecting webhook request - security violation');
-        
-        // Body wasn't parsed, so signature failure is real - reject
-        return res.status(403).json({ 
-          error: 'Forbidden',
-          message: 'Invalid webhook signature' 
-        });
-      }
-    } else {
-      console.log('✅ [Webhook] Signature verified successfully');
+      log.error('Invalid webhook signature - rejecting request');
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: 'Invalid webhook signature' 
+      });
     }
     
     // Validate payload structure
     if (!payload || !payload.type || !payload.data) {
-      console.error('Invalid webhook payload structure');
+      log.error('Invalid webhook payload structure');
       return res.status(400).json({ error: 'Invalid payload' });
     }
     
-    console.log(`[Webhook] Processing: ${payload.type}`);
+    log.info(`Processing ${payload.type}`);
     
     // Initialize Neon database client
     const sql = neon(databaseUrl);
@@ -1493,7 +1719,7 @@ export default async function handler(req, res) {
         break;
         
       default:
-        console.log(`⚠️  Unhandled webhook type: ${payload.type}`);
+        log.warn(`Unhandled webhook type: ${payload.type}`);
         // Return 200 to acknowledge receipt even if we don't handle it
     }
     
@@ -1511,39 +1737,39 @@ export default async function handler(req, res) {
     const timestamp = new Date().toISOString();
     const route = '/api/webhooks/square-order-paid';
     
-    // Log error with context for Slack alerts
-    console.error(`[${route}] Error ID: ${errorId}`, {
-      error: error.message,
-      stack: error.stack,
-      timestamp,
-      route,
-      statusCode: 500,
-      errorId,
-      name: error.name,
-      code: error.code,
-    });
+    // Log error with context
+    log.error(`Error ID: ${errorId}`, error);
     
     // Send alert to Slack (non-blocking - don't wait for response)
-    if (process.env.SLACK_WEBHOOK_URL) {
-      const baseUrl = process.env.VERCEL_URL 
-        ? `https://${process.env.VERCEL_URL}` 
-        : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-      
-      fetch(`${baseUrl}/api/webhooks/slack-alert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          route,
+    // Use centralized Slack alerting service
+    import('../utils/slackAlerter.js')
+      .then(({ sendSlackAlert }) => {
+        return sendSlackAlert({
+          priority: 'critical',
           errorId,
-          timestamp,
-          errorMessage: error.message || 'Internal server error',
-          statusCode: 500,
-        }),
-      }).catch(err => {
-        console.error('[Slack Alert] Failed to send alert:', err);
-        // Don't throw - we don't want Slack failures to break the error response
+          route,
+          title: 'Critical Webhook Error',
+          message: error.message || 'Internal server error',
+          context: '🔐 *Webhook Processing Error*: Failed to process Square order payment webhook.',
+          recommendedAction: [
+            'IMMEDIATE CHECK: Log into the Square Dashboard to find the order ID in the alert',
+            'MANUAL FIX: Manually insert that order\'s details into the Neon `orders` and `order_items` tables',
+            'CODE REVIEW: Check Vercel logs for the specific error (e.g., SQL syntax error, database connection failure) and push a fix immediately',
+          ],
+          fields: {
+            'Status Code': '500',
+            'Error Type': error.name || 'Error',
+          },
+          links: {
+            'View Vercel Logs': `https://vercel.com/${process.env.VERCEL_TEAM_SLUG || 'dashboard'}/${process.env.VERCEL_PROJECT_NAME || 'commerce-template-react'}/logs?query=${encodeURIComponent(errorId)}`,
+            'Square Dashboard': 'https://developer.squareup.com/apps',
+          },
+        });
+      })
+      .catch(err => {
+        // Failed to send Slack alert (non-critical)
+        console.error('[Square Order Paid] Failed to send Slack alert:', err);
       });
-    }
     
     // Provide more helpful error messages
     let errorMessage = error.message || 'Internal server error';

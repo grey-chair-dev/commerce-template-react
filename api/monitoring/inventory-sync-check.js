@@ -14,6 +14,7 @@
 
 import { neon } from '@neondatabase/serverless';
 import { SquareClient, SquareEnvironment } from 'square';
+import { sendSlackAlert } from '../utils/slackAlerter.js';
 
 // Alert threshold: Alert if mismatch is 5 or more units
 const MISMATCH_THRESHOLD = 5;
@@ -196,155 +197,51 @@ function compareInventories(squareInventory, neonInventory) {
 
 /**
  * Send Slack alert for inventory divergence
+ * Now uses centralized SlackAlerterService
  */
-async function sendSlackAlert(mismatches, totalChecked) {
-  let webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  
-  // Try to load from .env.local if not found (for local dev)
-  if (!webhookUrl) {
-    try {
-      const { config } = await import('dotenv');
-      const { fileURLToPath } = await import('url');
-      const { dirname, join } = await import('path');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const result = config({ path: join(__dirname, '../../.env.local') });
-      if (result && !result.error) {
-        webhookUrl = process.env.SLACK_WEBHOOK_URL;
-        console.log('[Inventory Check] Loaded SLACK_WEBHOOK_URL from .env.local');
-      }
-    } catch (e) {
-      console.warn('[Inventory Check] Failed to load dotenv:', e.message);
-    }
-  }
-  
-  if (!webhookUrl) {
-    console.warn('[Inventory Check] SLACK_WEBHOOK_URL not configured, skipping alert');
-    return false;
-  }
-  
-  // Strip quotes if present
-  if (webhookUrl) {
-    webhookUrl = webhookUrl.trim().replace(/^["']|["']$/g, '');
-  }
-  
-  // Get base URL for links
+async function sendInventorySyncAlert(mismatches, totalChecked) {
   const baseUrl = process.env.VERCEL_URL 
     ? `https://${process.env.VERCEL_URL}` 
     : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   
-  const emoji = mismatches.length > 0 ? '🚨' : '✅';
   const title = mismatches.length > 0 
-    ? '🚨 Inventory Divergence Detected' 
-    : '✅ Daily Sync Check Passed';
+    ? 'Inventory Divergence Detected' 
+    : 'Daily Sync Check Passed';
   
-  // Build mismatch list
-  let mismatchText = '';
-  if (mismatches.length > 0) {
-    mismatchText = mismatches.slice(0, 20).map((m, i) => {
-      return `${i + 1}. *${m.name}* (SKU: \`${m.square_variation_id}\`)\n   Square: ${m.square_count} | Neon: ${m.neon_count} | Diff: ${m.difference > 0 ? '+' : ''}${m.difference}`;
-    }).join('\n\n');
-    
-    if (mismatches.length > 20) {
-      mismatchText += `\n\n...and ${mismatches.length - 20} more mismatches`;
-    }
-  }
+  const recommendedAction = mismatches.length > 0
+    ? [
+        'CODE AUDIT: Run the inventory reconciliation script manually in debug mode to find which SKU is mismatched',
+        'RESYNC: Run a full, one-time catalog and inventory sync script (Phase 0.2/0.4 logic) to force Neon to match Square\'s current status, correcting the divergence',
+      ]
+    : [
+        'Continue Monitoring: Daily checks will continue automatically',
+        'Review Logs: Check Vercel logs for any warnings',
+        'Verify Webhooks: Ensure Square webhooks are active',
+      ];
   
-  const message = {
-    text: title,
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: title,
-          emoji: true,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Status:*\n${mismatches.length > 0 ? '❌ Failures Detected' : '✅ All Checks Passed'}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Items Checked:*\n${totalChecked}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Mismatches Found:*\n${mismatches.length}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Threshold:*\n${MISMATCH_THRESHOLD}+ units`,
-          },
-        ],
-      },
-      ...(mismatches.length > 0 ? [{
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*📋 Mismatched Items:*\n${mismatchText}`,
-        },
-      }] : [{
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '*✅ All inventories match!*',
-        },
-      }]),
-          {
-            type: 'section',
-            fields: [
-              {
-                type: 'mrkdwn',
-                text: `*🚨 IMMEDIATE ACTION REQUIRED:*\n${mismatches.length > 0
-                  ? '1. *CODE AUDIT:* Run the inventory reconciliation script manually in debug mode to find *which* SKU is mismatched.\n2. *RESYNC:* Run a full, **one-time catalog and inventory sync script** (Phase 0.2/0.4 logic) to force Neon to match Square\'s current status, correcting the divergence.'
-                  : '1. *Continue Monitoring*: Daily checks will continue automatically\n2. *Review Logs*: Check Vercel logs for any warnings\n3. *Verify Webhooks*: Ensure Square webhooks are active'}`,
-              },
-            ],
-          },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🔗 Quick Links:*\n` +
-                  `<${baseUrl}/api/monitoring/debug|View Debug Info>\n` +
-                  `<${baseUrl}/api/monitoring/inventory-sync-check|View Full Report>\n` +
-                  `<https://console.neon.tech|Neon Console>\n` +
-                  `<https://developer.squareup.com/apps|Square Dashboard>`
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `Timestamp: ${new Date().toISOString()}`,
-          },
-        ],
-      },
-    ],
-  };
-  
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('[Inventory Check] Failed to send Slack alert:', error);
-    return false;
-  }
+  return await sendSlackAlert({
+    priority: mismatches.length > 0 ? 'high' : 'low',
+    route: '/api/monitoring/inventory-sync-check',
+    title,
+    message: mismatches.length > 0 
+      ? `Found ${mismatches.length} inventory mismatch(es) between Square and Neon`
+      : 'All inventories match between Square and Neon',
+    context: `*Items Checked:* ${totalChecked}\n*Mismatches Found:* ${mismatches.length}\n*Threshold:* ${MISMATCH_THRESHOLD}+ units`,
+    recommendedAction,
+    fields: {
+      'Status': mismatches.length > 0 ? '❌ Failures Detected' : '✅ All Checks Passed',
+      'Items Checked': String(totalChecked),
+      'Mismatches Found': String(mismatches.length),
+      'Threshold': `${MISMATCH_THRESHOLD}+ units`,
+    },
+    links: {
+      'View Debug Info': `${baseUrl}/api/monitoring/debug`,
+      'View Full Report': `${baseUrl}/api/monitoring/inventory-sync-check`,
+      'Neon Console': 'https://console.neon.tech',
+      'Square Dashboard': 'https://developer.squareup.com/apps',
+    },
+    metadata: mismatches.length > 0 ? { mismatches } : undefined,
+  });
 }
 
 export default async function handler(req, res) {
@@ -428,7 +325,7 @@ export default async function handler(req, res) {
     
     // Send Slack alert if POST request
     if (req.method === 'POST') {
-      await sendSlackAlert(mismatches, result.totalChecked);
+      await sendInventorySyncAlert(mismatches, result.totalChecked);
     }
     
     return res.status(200).json(result);

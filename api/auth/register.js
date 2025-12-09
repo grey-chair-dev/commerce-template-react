@@ -198,6 +198,7 @@ export default async function handler(req, res) {
         last_name,
         phone,
         password_hash,
+        role,
         created_at,
         updated_at
       ) VALUES (
@@ -207,6 +208,7 @@ export default async function handler(req, res) {
         ${finalLastName},
         ${finalPhone},
         ${passwordHash},
+        'user', -- Default role for new registrations
         NOW(),
         NOW()
       )
@@ -221,6 +223,7 @@ export default async function handler(req, res) {
             customerId,
             email: normalizedEmail,
             type: 'customer',
+            role: 'user', // Default role for new registrations
           },
           JWT_SECRET,
           { expiresIn: JWT_EXPIRATION }

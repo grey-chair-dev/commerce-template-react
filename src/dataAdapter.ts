@@ -532,7 +532,7 @@ function resolveSnapshotUrl(appId: string): string | null {
   }
 }
 
-function sanitizeBatch(payload: Product[], shouldCache = true): Product[] {
+export function sanitizeBatch(payload: Product[], shouldCache = true): Product[] {
   return payload.map((product) => {
     const sanitized = sanitizeProduct(product)
     if (shouldCache) {

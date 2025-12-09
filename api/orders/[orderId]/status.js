@@ -1,6 +1,7 @@
 /**
  * Order Status Endpoint
  * Returns the current status of an order, including payment status
+ * Note: Order statuses are managed by Square webhooks, not directly via API
  */
 
 import { neon } from '@neondatabase/serverless';

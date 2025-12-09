@@ -194,17 +194,15 @@ export function CheckoutPage({
         onRedirectToReview={async () => {
           if (user) {
             try {
-              const response = await fetch('/api/auth/me', {
-                method: 'GET',
-                credentials: 'include',
-              })
-              const data = await response.json()
-              if (data?.success && data.customer) {
+              const { DataGateway } = await import('../services/DataGateway')
+              const response = await DataGateway.getCurrentUser()
+              if (!response.error && response.data) {
+                const userData = response.data
                 onSetContactForm({
-                  email: data.customer.email,
-                  firstName: data.customer.firstName,
-                  lastName: data.customer.lastName,
-                  phone: data.customer.phone || '',
+                  email: userData.email,
+                  firstName: userData.user_metadata?.firstName || '',
+                  lastName: userData.user_metadata?.lastName || '',
+                  phone: userData.phone || '',
                 })
                 goToStep('review')
               }

@@ -14,6 +14,7 @@
  */
 
 import { neon } from '@neondatabase/serverless';
+import { sendSlackAlert } from '../utils/slackAlerter.js';
 
 // Alert thresholds
 const CONNECTION_POOL_THRESHOLD = 0.80; // 80%
@@ -118,152 +119,52 @@ function getImmediateActions(alertData) {
 
 /**
  * Send Slack alert for Neon health issues
+ * Now uses centralized SlackAlerterService
  */
-async function sendSlackAlert(alertData) {
-  // Get SLACK_WEBHOOK_URL and strip quotes if present
-  let webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  if (webhookUrl) {
-    webhookUrl = webhookUrl.trim().replace(/^["']|["']$/g, '');
-  }
+async function sendNeonHealthAlert(alertData) {
+  const baseUrl = process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}` 
+    : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
   
-  // Try to load from .env.local if running locally and variable not found
-  if (!webhookUrl && process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-    try {
-      const { config } = await import('dotenv');
-      const { fileURLToPath } = await import('url');
-      const { dirname, join } = await import('path');
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const result = config({ path: join(__dirname, '../../.env.local') });
-      if (result && !result.error) {
-        webhookUrl = process.env.SLACK_WEBHOOK_URL;
-        if (webhookUrl) {
-          webhookUrl = webhookUrl.trim().replace(/^["']|["']$/g, '');
-          console.log(`[Neon Health] Loaded SLACK_WEBHOOK_URL from .env.local via dotenv`);
-        }
-      }
-    } catch (e) {
-      console.error(`[Neon Health] Failed to load dotenv:`, e.message);
-    }
-  }
-  
-  if (!webhookUrl) {
-    console.warn('[Neon Health] SLACK_WEBHOOK_URL not configured, skipping alert');
-    return false;
-  }
-  
-  const priority = alertData.priority === 'high' ? '🔴 HIGH PRIORITY' : '🟡 MEDIUM PRIORITY';
-  const emoji = alertData.priority === 'high' ? '🚨' : '⚠️';
-  
-  // Build actionable steps based on alert type
-  let actionableSteps = [];
+  // Build recommended actions based on alert type
+  const recommendedAction = [];
   if (alertData.actionable && alertData.actionable.length > 0) {
-    // Use provided actionable steps from alert data
-    actionableSteps = alertData.actionable.map((step, index) => `${index + 1}. *${step}*`);
+    recommendedAction.push(...alertData.actionable);
   } else if (alertData.resource === 'Connection Pool') {
-    // Fallback if actionable steps not provided
-    actionableSteps = [
-      '1. *Check Neon Console*: Review active connections and query patterns',
-      '2. *Scale Up*: Consider upgrading your Neon plan to increase connection limits',
-      '3. *Optimize Connections*: Review connection pooling settings and close idle connections',
-      '4. *Check for Leaks*: Ensure database connections are properly closed after use',
-      '5. *Monitor Trends*: Check if this is a spike or sustained increase',
-    ];
+    recommendedAction.push(
+      'Check Neon Console: Review active connections and query patterns',
+      'Scale Up: Consider upgrading your Neon plan to increase connection limits',
+      'Optimize Connections: Review connection pooling settings and close idle connections',
+      'Check for Leaks: Ensure database connections are properly closed after use',
+      'Monitor Trends: Check if this is a spike or sustained increase'
+    );
   } else if (alertData.resource === 'Query Latency') {
-    actionableSteps = [
-      '1. *Check Query Performance*: Review slow query logs in Neon Console',
-      '2. *Add Indexes*: Ensure proper indexes exist on frequently queried columns',
-      '3. *Optimize Query*: Review the SELECT products query for optimization opportunities',
-      '4. *Check Database Load*: Verify if high connection usage is affecting query speed',
-      '5. *Scale Compute*: Consider scaling up Neon compute resources if latency persists',
-    ];
+    recommendedAction.push(
+      'Check Query Performance: Review slow query logs in Neon Console',
+      'Add Indexes: Ensure proper indexes exist on frequently queried columns',
+      'Optimize Query: Review the SELECT products query for optimization opportunities',
+      'Check Database Load: Verify if high connection usage is affecting query speed',
+      'Scale Compute: Consider scaling up Neon compute resources if latency persists'
+    );
   }
   
-  const message = {
-    text: `${emoji} Neon Database Alert`,
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `${emoji} Neon Database Alert`,
-          emoji: true,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Priority:*\n${priority}`,
+  return await sendSlackAlert({
+    priority: alertData.priority || 'medium',
+    route: '/api/monitoring/neon-health',
+    title: 'Neon Database Alert',
+    message: alertData.message,
+    context: `*Resource:* ${alertData.resource}\n*Current Value:* ${alertData.currentValue}\n*Threshold:* ${alertData.threshold}`,
+    recommendedAction,
+    fields: {
+      'Resource': alertData.resource,
+      'Current Value': alertData.currentValue,
+      'Threshold': alertData.threshold,
+    },
+    links: {
+      'View Connection Pool Metrics': alertData.links?.console || 'https://console.neon.tech',
+      'View Full Health Status': alertData.links?.metrics || `${baseUrl}/api/monitoring/neon-health`,
           },
-          {
-            type: 'mrkdwn',
-            text: `*Resource:*\n${alertData.resource}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Current Value:*\n${alertData.currentValue}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Threshold:*\n${alertData.threshold}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Alert:*\n${alertData.message}`,
-        },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🚨 IMMEDIATE ACTION REQUIRED:*\n${getImmediateActions(alertData)}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*🔗 Quick Links:*\n${alertData.resource === 'Connection Pool' 
-              ? `<${alertData.links?.console || 'https://console.neon.tech'}|View Connection Pool Metrics>`
-              : `<${alertData.links?.console || 'https://console.neon.tech'}|View Query Performance>`}\n<${alertData.links?.metrics || 'http://localhost:3000/api/monitoring/neon-health'}|View Full Health Status>`,
-          },
-        ],
-      },
-      {
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `Timestamp: ${new Date().toISOString()}`,
-          },
-        ],
-      },
-    ],
-  };
-  
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-    
-    return response.ok;
-  } catch (error) {
-    console.error('[Neon Health] Failed to send Slack alert:', error);
-    return false;
-  }
+  });
 }
 
 export default async function handler(req, res) {
@@ -370,7 +271,7 @@ export default async function handler(req, res) {
     // Send Slack alerts if any issues detected
     if (req.method === 'POST' && healthStatus.alerts.length > 0) {
       for (const alert of healthStatus.alerts) {
-        await sendSlackAlert(alert);
+        await sendNeonHealthAlert(alert);
       }
     }
     

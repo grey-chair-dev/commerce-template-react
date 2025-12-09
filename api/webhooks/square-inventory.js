@@ -213,6 +213,57 @@ async function processInventoryCountUpdate(pool, event) {
     const updatedProduct = updateResult.rows[0];
     console.log(`✅ Database updated: ${updatedProduct.name || square_variation_id} → stock_count: ${updatedProduct.stock_count}`);
     
+    // Update products cache to reflect the new stock count
+    // This ensures the frontend sees the updated inventory immediately
+    try {
+      const cacheKey = 'square:products:spiralgroove';
+      const cacheResult = await client.query(`
+        SELECT value FROM product_cache WHERE key = $1
+      `, [cacheKey]);
+      
+      if (cacheResult.rows.length > 0) {
+        const cacheValue = cacheResult.rows[0].value;
+        if (cacheValue && cacheValue.products && Array.isArray(cacheValue.products)) {
+          // Update the product in the cache array
+          const updatedProducts = cacheValue.products.map((product) => {
+            if (product.id === square_variation_id) {
+              return {
+                ...product,
+                stockCount: new_count_num,
+              };
+            }
+            return product;
+          });
+          
+          // Create updated cache value
+          const updatedCacheValue = {
+            ...cacheValue,
+            products: updatedProducts,
+            timestamp: new Date().toISOString(),
+            count: updatedProducts.length,
+          };
+          
+          // Update the cache
+          await client.query(`
+            UPDATE product_cache
+            SET 
+              value = $1::jsonb,
+              updated_at = NOW()
+            WHERE key = $2
+          `, [JSON.stringify(updatedCacheValue), cacheKey]);
+          
+          console.log(`✅ Products cache updated for ${square_variation_id}: stockCount → ${new_count_num}`);
+        } else {
+          console.warn(`⚠️  Cache structure unexpected, skipping cache update`);
+        }
+      } else {
+        console.warn(`⚠️  Cache not found for key ${cacheKey}, skipping cache update`);
+      }
+    } catch (cacheError) {
+      // Log but don't fail the transaction if cache update fails
+      console.warn(`⚠️  Failed to update products cache: ${cacheError.message}`);
+    }
+    
     // Create inventory record for audit trail
     // Store the actual quantity_change value for accurate audit trail
     // NOTE: We temporarily disable the trigger to prevent double-counting since we already
@@ -262,29 +313,76 @@ async function processInventoryCountUpdate(pool, event) {
  * Vercel serverless functions receive req and res objects
  */
 /**
- * Read raw body from request
- * Vercel may provide body as Buffer, string, or parsed object
+ * Read raw body from request stream
+ * This function reads the raw body buffer directly from the request stream
+ * to ensure we have the exact bytes that Square signed
  */
 async function getRawBody(req) {
-  // If bodyParser is disabled, body should be Buffer or string
+  // Strategy 1: Check if body is already a Buffer (bodyParser: false should provide this)
   if (Buffer.isBuffer(req.body)) {
     return req.body.toString('utf8');
   }
+  
+  // Strategy 2: Check if body is a string (some Vercel configurations)
   if (typeof req.body === 'string') {
     return req.body;
   }
   
-  // If body was parsed, try to read from raw stream
-  // Note: This may not work in all Vercel environments
-  if (req.body && typeof req.body === 'object') {
-    // Body was parsed - we can't get exact raw body
-    // This will cause signature verification to fail
+  // Strategy 3: Read from request stream if body was not provided
+  // This is the fallback when bodyParser hasn't processed the body yet
+  if (!req.body || (req.body && typeof req.body === 'object' && Object.keys(req.body).length === 0)) {
+    return new Promise((resolve, reject) => {
+      let rawBody = Buffer.alloc(0);
+      let hasData = false;
+      
+      // Handle data chunks
+      req.on('data', (chunk) => {
+        hasData = true;
+        rawBody = Buffer.concat([rawBody, Buffer.from(chunk)]);
+      });
+      
+      // Handle end of stream
+      req.on('end', () => {
+        if (hasData) {
+          resolve(rawBody.toString('utf8'));
+        } else {
+          resolve(null);
+        }
+      });
+      
+      // Handle errors
+      req.on('error', (error) => {
+        reject(error);
+      });
+      
+      // Set timeout to prevent hanging (10 seconds)
+      setTimeout(() => {
+        if (!hasData) {
+          req.removeAllListeners();
+          resolve(null);
+        }
+      }, 10000);
+    });
+  }
+  
+  // Strategy 4: Body was parsed by Vercel (shouldn't happen with bodyParser: false)
+  // This is a security issue - we cannot verify signature with parsed body
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    console.error('❌ CRITICAL: Body was parsed by Vercel despite bodyParser: false');
+    console.error('❌ This means signature verification cannot work securely');
     return null;
   }
   
-  // Try to read from request stream (may not be available)
   return null;
 }
+
+// Vercel configuration to disable automatic body parsing
+// This is CRITICAL for webhook signature verification - we need the raw body
+export const config = {
+  api: {
+    bodyParser: false, // Disable automatic JSON parsing to get raw body for signature verification
+  },
+};
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -336,14 +434,30 @@ export default async function handler(req, res) {
     let payload;
     
     if (!rawBody) {
-      // Body was parsed by Vercel - we can't get exact raw body
-      // This means signature verification will fail, but we can still process for testing
+      // CRITICAL: Cannot get raw body - signature verification cannot proceed securely
+      console.error('❌ CRITICAL SECURITY ERROR: Cannot read raw request body');
+      console.error('❌ This prevents secure signature verification');
+      console.error('❌ Possible causes:');
+      console.error('   1. bodyParser: false not working in vercel.json');
+      console.error('   2. Vercel platform parsing body before handler');
+      console.error('   3. Request stream already consumed');
+      
+      // In production, we MUST reject requests without raw body
+      // For development/testing, we can allow with a warning
+      if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+        return res.status(500).json({ 
+          error: 'Server configuration error',
+          message: 'Cannot read raw request body for signature verification. This is a security issue.',
+        });
+      }
+      
+      // Development fallback (INSECURE - only for testing)
       if (req.body && typeof req.body === 'object') {
         payload = req.body;
         rawBody = JSON.stringify(payload, null, 0);
-        console.warn('⚠️  WARNING: Body was parsed by Vercel - signature verification will likely fail');
-        console.warn('⚠️  This is expected if bodyParser: false is not working in vercel.json');
-        console.warn('⚠️  For production, signature verification should be enabled');
+        console.warn('⚠️  DEVELOPMENT MODE: Using parsed body (INSECURE)');
+        console.warn('⚠️  Signature verification will be bypassed');
+        console.warn('⚠️  DO NOT USE IN PRODUCTION');
       } else {
         console.error('No request body received');
         return res.status(400).json({ error: 'Missing request body' });
@@ -412,14 +526,27 @@ export default async function handler(req, res) {
       console.error('Expected signature (base64):', expectedSig);
       
       // TEMPORARY: Allow processing if body was parsed (for testing)
-      // TODO: Remove this and ensure bodyParser: false works correctly
+      // CRITICAL: Signature verification failed
+      // In production, we MUST reject invalid signatures
+      if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+        console.error('❌ PRODUCTION: Rejecting request with invalid signature');
+        return res.status(403).json({ 
+          error: 'Forbidden',
+          message: 'Invalid webhook signature' 
+        });
+      }
+      
+      // Development mode: Check if body was parsed (which would explain signature failure)
       const bodyWasParsed = req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body) && typeof req.body !== 'string';
       if (bodyWasParsed) {
-        console.warn('⚠️  SIGNATURE VERIFICATION BYPASSED - Body was parsed by Vercel');
-        console.warn('⚠️  This is INSECURE and should only be used for testing');
-        console.warn('⚠️  Fix: Ensure bodyParser: false works in vercel.json or use a different approach');
+        console.warn('⚠️  DEVELOPMENT MODE: Signature verification bypassed');
+        console.warn('⚠️  Reason: Body was parsed by Vercel (bodyParser: false not working)');
+        console.warn('⚠️  This is INSECURE - fix before production deployment');
+        console.warn('⚠️  Action required: Verify bodyParser: false in vercel.json');
       } else {
-        // Body was not parsed, so signature failure is real - reject
+        // Body was not parsed, so signature failure is real - reject even in development
+        console.error('❌ Signature verification failed with raw body');
+        console.error('❌ This indicates the signature key may be incorrect or the request was tampered with');
         return res.status(403).json({ 
           error: 'Forbidden',
           message: 'Invalid webhook signature' 
@@ -497,26 +624,34 @@ export default async function handler(req, res) {
     });
     
     // Send alert to Slack (non-blocking - don't wait for response)
-    if (process.env.SLACK_WEBHOOK_URL) {
-      const baseUrl = process.env.VERCEL_URL 
-        ? `https://${process.env.VERCEL_URL}` 
-        : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-      
-      fetch(`${baseUrl}/api/webhooks/slack-alert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          route,
+    // Use centralized Slack alerting service
+    import('../utils/slackAlerter.js')
+      .then(({ sendSlackAlert }) => {
+        return sendSlackAlert({
+          priority: 'critical',
           errorId,
-          timestamp,
-          errorMessage: error.message || 'Internal server error',
-          statusCode: 500,
-        }),
-      }).catch(err => {
-        console.error('[Slack Alert] Failed to send alert:', err);
-        // Don't throw - we don't want Slack failures to break the error response
+          route,
+          title: 'Critical Webhook Error',
+          message: error.message || 'Internal server error',
+          context: '🔐 *Webhook Processing Error*: Failed to process Square inventory webhook.',
+          recommendedAction: [
+            'IDENTIFY SKU: Use the Square webhook payload in the Vercel logs to find the SKU that triggered the failure',
+            'MANUAL FIX: Log into Neon and manually update the `stock_count` for that one SKU to match Square',
+            'CODE REVIEW: Review the Vercel function logic for the specific error (e.g., failed database connection, invalid payload data)',
+          ],
+          fields: {
+            'Status Code': '500',
+            'Error Type': error.name || 'Error',
+          },
+          links: {
+            'View Vercel Logs': `https://vercel.com/${process.env.VERCEL_TEAM_SLUG || 'dashboard'}/${process.env.VERCEL_PROJECT_NAME || 'commerce-template-react'}/logs?query=${encodeURIComponent(errorId)}`,
+            'Square Dashboard': 'https://developer.squareup.com/apps',
+          },
       });
-    }
+      })
+      .catch(err => {
+        console.error('[Square Inventory] Failed to send Slack alert:', err);
+      });
     
     // Provide more helpful error messages
     let errorMessage = error.message || 'Internal server error';

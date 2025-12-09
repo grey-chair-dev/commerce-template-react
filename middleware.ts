@@ -7,13 +7,7 @@
  * For Vite/React apps on Vercel
  */
 
-// Vercel Edge Middleware types
-type Request = {
-  url: string
-  method: string
-  headers: Headers
-  next: () => Promise<Response>
-}
+import type { Request } from '@vercel/edge'
 
 // Patterns to block (common exploit paths)
 const BLOCKED_PATTERNS = [

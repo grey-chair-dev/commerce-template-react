@@ -93,48 +93,27 @@ export const StackAuthProvider = ({ children }: { children: ReactNode }) => {
   // Extract bootstrap logic to a reusable function
   const checkEmailPasswordAuth = useCallback(async () => {
     try {
-      const response = await fetch('/api/auth/me', {
-        method: 'GET',
-        credentials: 'include', // Include cookies
-      })
+      // Note: 401 is expected for unauthenticated users - this is not an error
+      const { DataGateway } = await import('../services/DataGateway')
+      const response = await DataGateway.getCurrentUser()
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.customer) {
-          console.log('[StackAuthProvider] Email/password auth check: SUCCESS', data.customer.email)
-          // Convert our customer format to User format for compatibility
-          const customerUser: User = {
-            id: data.customer.id,
-            email: data.customer.email,
-            app_metadata: {},
-            aud: 'authenticated',
-            confirmation_sent_at: data.customer.createdAt || new Date().toISOString(),
-            confirmed_at: data.customer.createdAt || new Date().toISOString(),
-            created_at: data.customer.createdAt || new Date().toISOString(),
-            phone: data.customer.phone || '',
-            factor_count: 0,
-            identities: [],
-            invited_at: data.customer.createdAt || new Date().toISOString(),
-            last_sign_in_at: new Date().toISOString(),
-            phone_change_sent_at: null,
-            role: 'authenticated',
-            updated_at: new Date().toISOString(),
-            user_metadata: {
-              displayName: data.customer.firstName && data.customer.lastName
-                ? `${data.customer.firstName} ${data.customer.lastName}`
-                : data.customer.firstName || data.customer.email,
-              firstName: data.customer.firstName,
-              lastName: data.customer.lastName,
-            },
-          }
-          setUser(customerUser)
-          return true
+      if (response.error) {
+        // Not authenticated (401 is expected for guest users - not an error)
+        // The browser console may show this as an error, but it's normal behavior
+        if (process.env.NODE_ENV === 'development' && import.meta.env.VITE_VERBOSE_AUTH_LOGS === 'true') {
+          console.log('[StackAuthProvider] Email/password auth check: NOT AUTHENTICATED - This is normal for guest users')
         }
+        setUser(createLocalDevUser(initialToken))
+        return false
       }
-      // Not authenticated (401 or other error)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[StackAuthProvider] Email/password auth check: NOT AUTHENTICATED (status:', response.status, ')')
+
+      if (response.data) {
+        console.log('[StackAuthProvider] Email/password auth check: SUCCESS', response.data.email)
+        setUser(response.data)
+        return true
       }
+
+      // No user data
       setUser(createLocalDevUser(initialToken))
       return false
     } catch (error) {
@@ -237,10 +216,8 @@ export const StackAuthProvider = ({ children }: { children: ReactNode }) => {
       
       // Optionally call a logout endpoint to clear the cookie server-side
       try {
-        await fetch('/api/auth/logout', {
-          method: 'POST',
-          credentials: 'include',
-        })
+        const { DataGateway } = await import('../services/DataGateway')
+        await DataGateway.logout()
       } catch (error) {
         // Logout endpoint might not exist yet, that's okay
         console.log('[StackAuthProvider] Logout endpoint not available')
