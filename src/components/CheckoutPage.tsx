@@ -94,6 +94,20 @@ export function CheckoutPage({
     }
   }, [user, isLoading, step, navigate, onSetContactForm])
 
+  // If review step but no contact form, redirect to account
+  useEffect(() => {
+    if (step === 'review' && !contactForm) {
+      navigate('/checkout?step=account', { replace: true })
+    }
+  }, [step, contactForm, navigate])
+
+  // Default: redirect to account for invalid steps
+  useEffect(() => {
+    if (step !== 'account' && step !== 'contact' && step !== 'review') {
+      navigate('/checkout?step=account', { replace: true })
+    }
+  }, [step, navigate])
+
   // Handle step navigation
   const goToStep = (newStep: 'account' | 'contact' | 'review') => {
     navigate(`/checkout?step=${newStep}`)
@@ -245,19 +259,13 @@ export function CheckoutPage({
     )
   }
 
-  // If review step but no contact form, redirect to account
+  // If review step but no contact form, show nothing (redirect handled by useEffect above)
   if (step === 'review' && !contactForm) {
-    useEffect(() => {
-      navigate('/checkout?step=account', { replace: true })
-    }, [navigate])
     return null
   }
 
-  // Default: redirect to account for invalid steps
+  // Default: show nothing for invalid steps (redirect handled by useEffect above)
   if (step !== 'account' && step !== 'contact' && step !== 'review') {
-    useEffect(() => {
-      navigate('/checkout?step=account', { replace: true })
-    }, [navigate])
     return null
   }
   
