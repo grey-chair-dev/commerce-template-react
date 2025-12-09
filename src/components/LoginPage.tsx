@@ -30,6 +30,7 @@ type LoginPageProps = {
   onTermsOfService?: () => void
   onSignOut?: () => void
   onAccount?: () => void
+  onReturnToCheckout?: () => void
 }
 
 export function LoginPage({
@@ -58,6 +59,7 @@ export function LoginPage({
   onTermsOfService,
   onSignOut = () => {},
   onAccount = () => {},
+  onReturnToCheckout,
 }: LoginPageProps) {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -150,10 +152,19 @@ export function LoginPage({
       // Check if we should return to checkout
       const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
       if (returnToCheckout) {
-        // Don't call onBack - let App.tsx handle the redirect
-        // The useEffect in App.tsx will detect the user and return to checkout
-        // Use full page reload to ensure cookie is set and App.tsx can handle redirect
         console.log('[Login] Returning to checkout after login')
+        sessionStorage.removeItem('return_to_checkout')
+        
+        // If callback is provided, use it to directly open checkout
+        // Otherwise, navigate to home and let useEffect handle it
+        if (onReturnToCheckout) {
+          onReturnToCheckout()
+          // Close login page by navigating to home
+          navigate('/')
+          return
+        }
+        
+        // Fallback: navigate to home and let useEffect handle checkout
         window.location.href = '/'
         return
       }
