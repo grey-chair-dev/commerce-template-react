@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Header } from './Header'
 import { Footer } from './Footer'
+import { useStackAuth } from '../auth/StackAuthProvider'
 import type { Product } from '../dataAdapter'
 
 type SignUpPageProps = {
@@ -58,6 +59,7 @@ export function SignUpPage({
   onAccount = () => {},
 }: SignUpPageProps) {
   const navigate = useNavigate()
+  const { refreshAuth } = useStackAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -265,25 +267,6 @@ export function SignUpPage({
                   className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
                   required
                 />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
-                  Phone number <span className="text-xs text-slate-400">(optional)</span>
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => {
-                    setPhone(e.target.value)
-                    setError(null)
-                  }}
-                  placeholder="(513) 555-1234"
-                  className="w-full rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-white placeholder-slate-500 focus:border-primary focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-slate-400">
-                  We'll use this to contact you about your orders
-                </p>
               </div>
 
               <div>
