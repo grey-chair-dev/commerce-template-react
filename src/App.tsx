@@ -141,7 +141,6 @@ function App() {
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState<string | null>(null)
   const [showCookieBanner, setShowCookieBanner] = useState(false)
-  const [isFilterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null)
   const [isSearchOpen, setSearchOpen] = useState(false)
   const [pdpProduct, setPdpProduct] = useState<Product | null>(null)
@@ -862,13 +861,6 @@ function App() {
       navigator.clipboard?.writeText(`${payload.text} ${payload.url}`)
     }
   }
-  const [pendingFilters, setPendingFilters] = useState<{
-    category: string
-    sortBy: 'featured' | 'priceAsc' | 'priceDesc'
-  }>({
-    category: 'All',
-    sortBy: 'featured',
-  })
   const lastEventRef = useRef(performance.now())
 
   // Fetch products from catalog API
@@ -1017,18 +1009,6 @@ function App() {
     setShowCookieBanner(false)
   }
 
-  const handleOpenFilterDrawer = () => {
-    setFilterDrawerOpen(true)
-  }
-
-  const handleApplyFilters = () => {
-    // Filters are applied in the catalog page
-    setFilterDrawerOpen(false)
-  }
-
-  const handleResetFilters = () => {
-    setPendingFilters({ category: 'All', sortBy: 'featured' })
-  }
 
   const categories = useMemo(() => {
     const unique = new Set(products.map((product) => product.category))
@@ -2107,13 +2087,6 @@ function App() {
                   </div>
                 </SectionShell>
 
-              <button
-                className="fixed bottom-6 right-4 z-40 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-brand transition hover:bg-primary/80 md:hidden"
-                onClick={handleOpenFilterDrawer}
-              >
-                <span className="h-2 w-2 rounded-full bg-white" />
-                Filters
-              </button>
 
               </main>
 
@@ -2150,84 +2123,6 @@ function App() {
       </Routes>
 
       {/* Global Modals/Overlays - Available on all pages */}
-      {isFilterDrawerOpen ? (
-        <div className="fixed inset-0 z-50 flex flex-col bg-surface/95 text-white md:hidden">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
-            <p className="text-base font-semibold">Filters & sorting</p>
-            <button
-              className="text-sm text-slate-300"
-              onClick={() => setFilterDrawerOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-4 py-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-secondary">Category</p>
-              <div className="mt-3 space-y-2">
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    className={`w-full rounded-2xl border px-4 py-3 text-left text-sm ${
-                      pendingFilters.category === category
-                        ? 'border-primary bg-primary/20'
-                        : 'border-white/10 text-slate-200'
-                    }`}
-                    onClick={() =>
-                      setPendingFilters((prev) => ({ ...prev, category }))
-                    }
-                  >
-                    {category}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.3em] text-secondary">Sort</p>
-              <div className="mt-3 space-y-2">
-                {[
-                  { value: 'featured', label: 'Inventory (desc)' },
-                  { value: 'priceAsc', label: 'Price · low → high' },
-                  { value: 'priceDesc', label: 'Price · high → low' },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    className={`w-full rounded-2xl border px-4 py-3 text-left text-sm ${
-                      pendingFilters.sortBy === option.value
-                        ? 'border-primary bg-primary/20'
-                        : 'border-white/10 text-slate-200'
-                    }`}
-                    onClick={() =>
-                      setPendingFilters((prev) => ({
-                        ...prev,
-                        sortBy: option.value as 'featured' | 'priceAsc' | 'priceDesc',
-                      }))
-                    }
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="border-t border-white/10 px-4 py-4">
-            <div className="flex gap-3">
-              <button
-                className="flex-1 rounded-full border border-white/30 px-4 py-3 text-sm font-semibold text-white/90"
-                onClick={handleResetFilters}
-              >
-                Reset
-              </button>
-              <button
-                className="flex-1 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-white shadow-brand"
-                onClick={handleApplyFilters}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {showCookieBanner ? (
         <CookieBanner
