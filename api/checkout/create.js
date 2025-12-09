@@ -121,13 +121,20 @@ export default async function handler(req, res) {
         return process.env.NEXT_PUBLIC_SITE_URL;
       }
       
-      // For local development, ALWAYS use HTTP (same port as request)
+      // For local development, handle port differences between backend (3000) and frontend (5173)
       const host = req.headers.host || 'localhost:3000';
       console.log('[Checkout] Detected host:', host);
       
-      // If host contains localhost or 127.0.0.1, force HTTP (keep same port)
+      // If host contains localhost or 127.0.0.1
       if (host.includes('localhost') || host.includes('127.0.0.1')) {
-        // Extract port from host (e.g., "localhost:3000" -> "3000")
+        // If running on port 3000 (backend), redirect to 5173 (frontend)
+        if (host.includes('3000')) {
+          const frontendUrl = 'http://localhost:5173';
+          console.log('[Checkout] Localhost backend detected - directing to frontend:', frontendUrl);
+          return frontendUrl;
+        }
+        
+        // Otherwise force HTTP (keep same port)
         const port = host.includes(':') ? host.split(':')[1] : '3000';
         const httpUrl = `http://localhost:${port}`;
         console.log('[Checkout] Localhost detected - forcing HTTP:', httpUrl);
