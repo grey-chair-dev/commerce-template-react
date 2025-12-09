@@ -93,11 +93,12 @@ async function fetchFullOrderFromSquare(squareOrderId) {
     }
     
     const squareClient = new SquareClient({
-      accessToken: squareAccessToken,
+      token: squareAccessToken,
       environment: squareEnvironment === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
     });
     
     // Fetch full order from Square
+    // Square SDK v43 uses 'retrieveOrder' method on orders API
     const orderResponse = await squareClient.orders.retrieveOrder(squareOrderId);
     
     if (orderResponse.result && orderResponse.result.order) {
@@ -768,11 +769,12 @@ async function processOrderUpdate(sql, event) {
           console.warn(`[Webhook] Order will be created with minimal data from webhook payload`);
         } else {
           const squareClient = new SquareClient({
-            accessToken: squareAccessToken,
+            token: squareAccessToken,
             environment: squareEnvironment === 'production' ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
           });
           
           // Fetch full order from Square
+          // Square SDK v43 uses 'retrieveOrder' method on orders API
           const orderResponse = await squareClient.orders.retrieveOrder(squareOrderId);
           
           if (orderResponse.result && orderResponse.result.order) {
