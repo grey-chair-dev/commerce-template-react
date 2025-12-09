@@ -2616,7 +2616,8 @@ function App() {
         />
       ) : null}
 
-      {checkoutStep === 'account' ? (
+      {/* Checkout is now handled by /checkout route - old modal rendering removed */}
+      {false && checkoutStep === 'account' ? (
         <CheckoutAccountPage
           cartSubtotal={cartSubtotal}
           estimatedTax={estimatedTax}
