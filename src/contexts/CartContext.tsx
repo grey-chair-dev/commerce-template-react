@@ -373,11 +373,28 @@ export function CartProvider({
           afterCount: updated.length,
         })
 
-        // P.4: Save to database if logged in (async, don't block UI)
+        // Save to database if logged in (async, don't block UI)
         if (user && user.id && !isCartSyncing) {
           saveCartToDatabase(updated).catch((error) => {
             console.error('[Cart] Failed to save cart after removal:', error)
           })
+        } else {
+          // For guest users, immediately save to localStorage
+          try {
+            if (updated.length > 0) {
+              const cartData = updated.map((item) => ({
+                sku: item.id,
+                quantity: item.quantity,
+              }))
+              localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartData))
+              console.log('[Cart] Saved guest cart to localStorage after removal:', updated.length, 'items')
+            } else {
+              localStorage.removeItem(CART_STORAGE_KEY)
+              console.log('[Cart] Cleared guest cart from localStorage after removal')
+            }
+          } catch (error) {
+            console.error('[Cart] Failed to save guest cart to localStorage after removal:', error)
+          }
         }
 
         return updated

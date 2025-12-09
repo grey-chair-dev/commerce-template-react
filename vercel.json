@@ -132,6 +132,10 @@
       "destination": "/api/webhooks/webhook-test.js"
     },
     {
+      "source": "/api/webhooks/check-env",
+      "destination": "/api/webhooks/check-env.js"
+    },
+    {
       "source": "/api/catalog/products",
       "destination": "/api/catalog/products.js"
     },

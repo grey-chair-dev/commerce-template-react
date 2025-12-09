@@ -31,9 +31,13 @@ const log = {
 
 /**
  * Verify Square webhook signature
+ * @param {string} signature - The X-Square-Signature header value
+ * @param {Buffer|string} body - The raw request body (Buffer or string)
+ * @param {string} signatureKey - The Square webhook signature key
+ * @param {string} notificationUrl - The full notification URL (required by Square)
  */
-function verifySquareSignature(signature, body, signatureKey) {
-  if (!signature || !signatureKey) {
+function verifySquareSignature(signature, body, signatureKey, notificationUrl) {
+  if (!signature || !signatureKey || !notificationUrl) {
     return false;
   }
 
@@ -46,9 +50,19 @@ function verifySquareSignature(signature, body, signatureKey) {
     return false;
   }
 
+  // CRITICAL: Square includes the notification URL in the signature calculation
+  // The signature is: HMAC-SHA256(signatureKey, notificationUrl + rawBody)
+  // We must concatenate the URL and body in the exact order Square expects
+  
+  // Convert body to string if it's a Buffer (for concatenation)
+  const bodyString = Buffer.isBuffer(body) ? body.toString('utf8') : body;
+  
+  // Concatenate URL and body (in this exact order)
+  const signaturePayload = notificationUrl + bodyString;
+  
   // Calculate HMAC SHA256
   const hmac = crypto.createHmac('sha256', signatureKey);
-  hmac.update(body, 'utf8');
+  hmac.update(signaturePayload, 'utf8');
   const calculatedSignature = hmac.digest('base64');
 
   // Compare signatures using constant-time comparison
@@ -1540,92 +1554,136 @@ async function processPaymentEvent(sql, event) {
 }
 
 /**
- * Read raw body from request stream
- * CRITICAL: This MUST read from the stream BEFORE any parsing happens
- * Once the stream is consumed, we cannot get the raw bytes needed for signature verification
+ * Read raw body from request stream manually
+ * CRITICAL: This MUST read the raw bytes BEFORE any parsing happens
+ * Uses event-based stream reading (req.on('data')) which is more reliable in Vercel
  */
 async function getRawBody(req) {
-  // CRITICAL: Try to read from stream FIRST (before checking req.body)
-  // This is the only way to get the exact raw bytes that Square signed
-  // If the stream is still readable, we can get the raw body
-  
-  // Check if stream is readable (hasn't been consumed yet)
-  if (req.readable && !req.readableEnded) {
-    return new Promise((resolve, reject) => {
-      const chunks = [];
-      let hasData = false;
-      
-      // Read data chunks as they arrive
-      req.on('data', (chunk) => {
-        hasData = true;
-        // Preserve chunk as Buffer to maintain exact bytes
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  try {
+    // Strategy 1: Try to read from stream using event-based approach
+    // This is the most reliable method for Vercel serverless functions
+    if (req.readable && !req.readableEnded) {
+      const rawBodyBuffer = await new Promise((resolve, reject) => {
+        const chunks = [];
+        let hasData = false;
+        
+        // Read data chunks as they arrive
+        req.on('data', (chunk) => {
+          hasData = true;
+          // Preserve chunk as Buffer to maintain exact bytes
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        
+        // When stream ends, concatenate all chunks
+        req.on('end', () => {
+          if (hasData) {
+            const buffer = Buffer.concat(chunks);
+            resolve(buffer);
+          } else {
+            resolve(null);
+          }
+        });
+        
+        // Handle stream errors
+        req.on('error', (error) => {
+          log.error('Stream error', error);
+          reject(error);
+        });
+        
+        // Timeout protection (10 seconds)
+        const timeout = setTimeout(() => {
+          if (!hasData) {
+            req.removeAllListeners();
+            resolve(null);
+          }
+        }, 10000);
+        
+        // Clear timeout if we get data
+        req.once('data', () => {
+          clearTimeout(timeout);
+        });
       });
       
-      // When stream ends, concatenate all chunks
-      req.on('end', () => {
-        if (hasData) {
-          const rawBodyBuffer = Buffer.concat(chunks);
-          resolve(rawBodyBuffer.toString('utf8'));
-        } else {
-          resolve(null);
-        }
-      });
+      if (rawBodyBuffer && rawBodyBuffer.length > 0) {
+        log.info('Successfully read raw body stream', {
+          bufferLength: rawBodyBuffer.length,
+          bufferType: rawBodyBuffer.constructor.name,
+        });
+        
+        return {
+          buffer: rawBodyBuffer,
+          string: rawBodyBuffer.toString('utf8'),
+        };
+      }
+    }
+    
+    // Strategy 2: Body is already a Buffer (bodyParser: false worked)
+    if (Buffer.isBuffer(req.body)) {
+      log.info('Body is already a Buffer');
+      return {
+        buffer: req.body,
+        string: req.body.toString('utf8'),
+      };
+    }
+    
+    // Strategy 3: Body is a string (some Vercel configurations)
+    if (typeof req.body === 'string') {
+      log.info('Body is a string, converting to Buffer');
+      const buffer = Buffer.from(req.body, 'utf8');
+      return {
+        buffer: buffer,
+        string: req.body,
+      };
+    }
+    
+    // Strategy 4: Stream was already consumed - body was parsed by Vercel
+    // This is a CRITICAL security issue - we cannot verify signature
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      log.error('CRITICAL SECURITY ERROR: Cannot read raw request body');
+      console.error('❌ Stream was already consumed - body was parsed by Vercel');
+      console.error('❌ This prevents secure signature verification');
+      console.error('❌ Possible causes:');
+      console.error('   1. bodyParser: false not working in Vercel');
+      console.error('   2. Middleware or framework parsed body before handler');
+      console.error('   3. Request stream already consumed');
       
-      // Handle stream errors
-      req.on('error', (error) => {
-        console.error('[getRawBody] Stream error:', error.message);
-        reject(error);
-      });
+      // In production, we MUST reject requests without raw body
+      if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+        return null;
+      }
       
-      // Timeout protection (10 seconds)
-      const timeout = setTimeout(() => {
-        if (!hasData) {
-          req.removeAllListeners();
-          resolve(null);
-        }
-      }, 10000);
-      
-      // Clear timeout if we get data
-      req.once('data', () => {
-        clearTimeout(timeout);
-      });
-    });
-  }
-  
-  // Strategy 2: Body is already a Buffer (bodyParser: false worked)
-  if (Buffer.isBuffer(req.body)) {
-    return req.body.toString('utf8');
-  }
-  
-  // Strategy 3: Body is a string (some Vercel configurations)
-  if (typeof req.body === 'string') {
-    return req.body;
-  }
-  
-  // Strategy 4: Stream was already consumed - body was parsed by Vercel
-  // This is a CRITICAL security issue - we cannot verify signature
-  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
-    console.error('❌ CRITICAL SECURITY ERROR: Cannot read raw request body');
-    console.error('❌ Stream was already consumed - body was parsed by Vercel');
+      // Development fallback (INSECURE - only for testing)
+      console.warn('⚠️  DEVELOPMENT MODE: Attempting to reconstruct body from parsed object');
+      console.warn('⚠️  This will NOT work for signature verification - signatures will fail');
+      const reconstructed = JSON.stringify(req.body, null, 0);
+      return {
+        buffer: Buffer.from(reconstructed, 'utf8'),
+        string: reconstructed,
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    log.error('CRITICAL: Failed to read raw request body stream', error);
     console.error('❌ This prevents secure signature verification');
-    console.error('❌ Possible causes:');
-    console.error('   1. bodyParser: false not working in Vercel');
-    console.error('   2. Middleware or framework parsed body before handler');
-    console.error('   3. Request stream already consumed');
     
     // In production, we MUST reject requests without raw body
     if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
-      return null; // Will trigger rejection
+      return null;
     }
     
     // Development fallback (INSECURE - only for testing)
-    console.warn('⚠️  DEVELOPMENT MODE: Attempting to reconstruct body from parsed object');
-    console.warn('⚠️  This will NOT work for signature verification - signatures will fail');
-    return JSON.stringify(req.body, null, 0);
+    console.warn('⚠️  DEVELOPMENT MODE: Attempting fallback');
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      const reconstructed = JSON.stringify(req.body, null, 0);
+      return {
+        buffer: Buffer.from(reconstructed, 'utf8'),
+        string: reconstructed,
+      };
+    }
+    
+    return null;
   }
-  
-  return null;
 }
 
 /**
@@ -1654,15 +1712,15 @@ export default async function handler(req, res) {
   // CRITICAL: Get raw body FIRST, before ANY other processing
   // This MUST happen before we touch req.body or do anything else
   // Once the stream is consumed, we cannot get the raw bytes needed for signature verification
-  let rawBody;
+  let rawBodyData;
   try {
-    rawBody = await getRawBody(req);
+    rawBodyData = await getRawBody(req);
   } catch (streamError) {
     log.error('Error reading request body stream', streamError);
     return res.status(400).json({ error: 'Failed to read request body' });
   }
   
-  if (!rawBody || rawBody.length === 0) {
+  if (!rawBodyData || !rawBodyData.buffer || rawBodyData.buffer.length === 0) {
     // CRITICAL: Cannot get raw body - signature verification cannot proceed securely
     console.error('❌ CRITICAL SECURITY ERROR: Cannot read raw request body');
     console.error('❌ This prevents secure signature verification');
@@ -1709,13 +1767,15 @@ export default async function handler(req, res) {
     // Parse the raw body to get the payload
     let payload;
     try {
-      payload = rawBody ? JSON.parse(rawBody) : req.body;
+      payload = rawBodyData ? JSON.parse(rawBodyData.string) : req.body;
     } catch (e) {
       log.error('Failed to parse JSON body', e);
       return res.status(400).json({ error: 'Invalid JSON body' });
     }
     
     // Verify webhook signature
+    // CRITICAL: Use the raw Buffer for signature verification, not the UTF-8 string
+    // Square signs the exact raw bytes, so we must hash the Buffer directly
     const signature = req.headers['x-square-signature'] || 
                      req.headers['x-square-hmacsha256-signature'] ||
                      req.headers['x-square-hmac-sha256-signature'];
@@ -1728,13 +1788,60 @@ export default async function handler(req, res) {
       });
     }
     
-    const isValid = verifySquareSignature(signature, rawBody, signatureKey);
+    // CRITICAL: Square includes the notification URL in the signature calculation
+    // The signature is: HMAC-SHA256(signatureKey, notificationUrl + rawBody)
+    const notificationUrl = req.headers['x-forwarded-proto'] && req.headers['host']
+      ? `${req.headers['x-forwarded-proto']}://${req.headers['host']}${req.url}`
+      : req.url || '/api/webhooks/square-order-paid';
+    
+    // Log signature verification attempt
+    log.info('Attempting signature verification', {
+      signatureLength: signature.length,
+      signaturePreview: signature.substring(0, 30) + '...',
+      bodyBufferLength: rawBodyData.buffer.length,
+      signatureKeyLength: signatureKey.length,
+      signatureKeySet: !!signatureKey,
+      notificationUrl: notificationUrl,
+    });
+    
+    const isValid = verifySquareSignature(signature, rawBodyData.buffer, signatureKey, notificationUrl);
     
     if (!isValid) {
-      log.error('Invalid webhook signature - rejecting request');
+      log.error('Invalid webhook signature - rejecting request', {
+        signatureLength: signature.length,
+        bodyLength: rawBodyData.buffer.length,
+        signatureKeyLength: signatureKey.length,
+      });
+      
+      // Calculate what we got for debugging (first 30 chars only)
+      // Square includes URL in signature: HMAC-SHA256(signatureKey, notificationUrl + rawBody)
+      const bodyString = rawBodyData.buffer.toString('utf8');
+      const signaturePayload = notificationUrl + bodyString;
+      const hmac = crypto.createHmac('sha256', signatureKey);
+      hmac.update(signaturePayload, 'utf8');
+      const calculated = hmac.digest('base64');
+      const expectedSig = signature.startsWith('sha256=') ? signature.substring(7) : signature;
+      
+      log.error('Signature mismatch details', {
+        expectedLength: expectedSig.length,
+        calculatedLength: calculated.length,
+        expectedPreview: expectedSig.substring(0, 30) + '...',
+        calculatedPreview: calculated.substring(0, 30) + '...',
+      });
+      
       return res.status(403).json({ 
         error: 'Forbidden',
-        message: 'Invalid webhook signature' 
+        message: 'Invalid webhook signature',
+        // Include diagnostic info in development only
+        ...(process.env.NODE_ENV !== 'production' && {
+          debug: {
+            signatureLength: signature.length,
+            bodyLength: rawBodyData.buffer.length,
+            signatureKeyLength: signatureKey.length,
+            expectedLength: expectedSig.length,
+            calculatedLength: calculated.length,
+          }
+        })
       });
     }
     
