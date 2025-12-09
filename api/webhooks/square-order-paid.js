@@ -935,7 +935,7 @@ async function sendOrderConfirmationEmail(sql, orderId) {
 
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_SITE_URL || 'https://spiralgrooverecords.greychair.io';
+      : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:5173';
 
     await sendEmail({
       to: customerEmail,
@@ -1006,7 +1006,7 @@ async function sendOrderStatusUpdateEmail(sql, orderId, newStatus, previousStatu
 
     const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_SITE_URL || 'https://spiralgrooverecords.greychair.io';
+      : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:5173';
 
     const { html, text } = getOrderStatusUpdateEmail({
       orderNumber: order.order_number,
