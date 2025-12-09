@@ -9,10 +9,14 @@ export default defineConfig({
       jsxRuntime: 'automatic',
     }),
   ],
-  assetsInclude: ['**/*.html'],
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    rollupOptions: {
+      input: {
+        main: './index.html',
+      },
+    },
   },
   server: {
     fs: {
