@@ -42,7 +42,7 @@
     },
     {
       "id": 2,
-      "module": "gmail:sendAnEmail",
+      "module": "google-email:sendAnEmail",
       "version": 4,
       "parameters": {
         "__IMTCONN__": "{{GMAIL_CONNECTION_ID}}"
@@ -93,7 +93,7 @@
             "__IMTCONN__": {
               "data": {
                 "scoped": "true",
-                "connection": "gmail"
+                "connection": "google-email"
               },
               "label": "Gmail Connection"
             }
@@ -102,7 +102,7 @@
         "parameters": [
           {
             "name": "__IMTCONN__",
-            "type": "account:gmail",
+            "type": "account:google-email",
             "label": "Connection",
             "required": true
           }
@@ -246,4 +246,3 @@
     "notes": []
   }
 }
-
