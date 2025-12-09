@@ -1046,18 +1046,31 @@ async function processPaymentEvent(sql, event) {
     const data = event.data;
     const object = data.object;
     
-    if (!object || !object.id) {
-      console.warn('Missing payment ID in payment event');
+    // Handle different payload structures:
+    // 1. { data: { object: { payment: { id: "...", ... } } } } - nested payment object
+    // 2. { data: { object: { id: "...", ... } } } - direct payment object
+    const payment = object?.payment || object;
+    
+    if (!payment || !payment.id) {
+      console.warn('[Webhook] Missing payment ID in payment event');
+      console.warn('[Webhook] Payment object structure:', JSON.stringify(object, null, 2).substring(0, 500));
       return null;
     }
     
-    const squarePaymentId = object.id;
-    const paymentStatus = object.status || 'APPROVED';
-    const orderId = object.order_id || null;
+    const squarePaymentId = payment.id;
+    const paymentStatus = payment.status || 'APPROVED';
+    const orderId = payment.order_id || null;
     
     // Extract payment amount
-    const amountMoney = object.amount_money || {};
+    const amountMoney = payment.amount_money || payment.total_money || {};
     const totalAmount = amountMoney.amount ? Number(amountMoney.amount) / 100 : 0; // Convert cents to dollars
+    
+    console.log(`[Webhook] Processing payment event:`, {
+      paymentId: squarePaymentId,
+      status: paymentStatus,
+      orderId: orderId,
+      amount: totalAmount,
+    });
     
     // Find order by Square order ID
     if (orderId) {
