@@ -71,17 +71,25 @@ export function CheckoutPage({
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const step = searchParams.get('step') || 'account'
+  const redirectingRef = useRef(false)
+  const hasSetContactFormRef = useRef(false)
 
   // Redirect to account step if cart is empty
   useEffect(() => {
-    if (cartItems.length === 0 && step !== 'account') {
+    if (cartItems.length === 0 && step !== 'account' && !redirectingRef.current) {
+      redirectingRef.current = true
       navigate('/checkout?step=account', { replace: true })
+      setTimeout(() => {
+        redirectingRef.current = false
+      }, 300)
     }
   }, [cartItems.length, step, navigate])
 
   // If user is logged in and on account step, redirect to review
   useEffect(() => {
-    if (user && !isLoading && step === 'account') {
+    if (user && !isLoading && step === 'account' && !redirectingRef.current) {
+      redirectingRef.current = true
+      hasSetContactFormRef.current = true
       // Pre-fill contact form with user data
       const contactFormData = {
         email: user.email || '',
@@ -90,27 +98,48 @@ export function CheckoutPage({
         phone: user.phone || '',
       }
       onSetContactForm(contactFormData)
-      navigate('/checkout?step=review', { replace: true })
+      // Small delay to ensure contact form state is updated
+      setTimeout(() => {
+        navigate('/checkout?step=review', { replace: true })
+        setTimeout(() => {
+          redirectingRef.current = false
+        }, 300)
+      }, 100)
     }
   }, [user, isLoading, step, navigate, onSetContactForm])
 
-  // If review step but no contact form, redirect to account
-  // BUT: Don't redirect if user is logged in (contact form should be set by the account->review redirect)
-  // Give a small delay to allow contact form to be set
+  // Reset hasSetContactFormRef when step changes away from account
   useEffect(() => {
-    if (step === 'review' && !contactForm) {
-      // If user is logged in, wait a bit for contact form to be set
-      if (user && !isLoading) {
+    if (step !== 'account') {
+      hasSetContactFormRef.current = false
+    }
+  }, [step])
+
+  // If review step but no contact form, redirect to account
+  // BUT: Don't redirect if we just set the contact form for a logged-in user
+  useEffect(() => {
+    if (step === 'review' && !contactForm && !redirectingRef.current) {
+      // If user is logged in and we just set the contact form, wait longer
+      if (user && !isLoading && hasSetContactFormRef.current) {
         const timer = setTimeout(() => {
           // If contact form still not set after delay, redirect to account
-          if (!contactForm) {
+          if (!contactForm && !redirectingRef.current) {
+            redirectingRef.current = true
+            hasSetContactFormRef.current = false
             navigate('/checkout?step=account', { replace: true })
+            setTimeout(() => {
+              redirectingRef.current = false
+            }, 300)
           }
-        }, 100)
+        }, 300)
         return () => clearTimeout(timer)
-      } else {
+      } else if (!user || isLoading) {
         // Guest user or still loading - redirect immediately
+        redirectingRef.current = true
         navigate('/checkout?step=account', { replace: true })
+        setTimeout(() => {
+          redirectingRef.current = false
+        }, 300)
       }
     }
   }, [step, contactForm, navigate, user, isLoading])
