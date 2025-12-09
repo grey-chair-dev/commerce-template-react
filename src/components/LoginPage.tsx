@@ -127,13 +127,9 @@ export function LoginPage({
       setIsSubmitting(false)
       
       // For localhost development with cross-port cookies, redirect to home
-      // This ensures the cookie is properly available for subsequent requests
-      if (window.location.hostname === 'localhost') {
-        console.log('[Login] Redirecting to home page...')
-        // Navigate to home first, then the page will reload naturally
-        window.location.href = '/'
-        return
-      }
+      // Check if we should return to checkout BEFORE any redirects
+      const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
+      const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
       
       // Small delay to ensure cookie is set before checking auth
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -144,14 +140,17 @@ export function LoginPage({
         console.log('[Login] Auth state refreshed successfully')
       } catch (refreshError) {
         console.error('[Login] Failed to refresh auth, reloading page:', refreshError)
-        // If refresh fails, reload the page to ensure cookie is picked up
+        // If refresh fails and we need to return to checkout, navigate there
+        if (returnToCheckout) {
+          sessionStorage.removeItem('return_to_checkout')
+          sessionStorage.removeItem('return_to_checkout_step')
+          window.location.href = `/checkout?step=${returnToCheckoutStep}`
+          return
+        }
+        // Otherwise reload the page to ensure cookie is picked up
         window.location.reload()
         return
       }
-      
-      // Check if we should return to checkout
-      const returnToCheckout = sessionStorage.getItem('return_to_checkout') === 'true'
-      const returnToCheckoutStep = sessionStorage.getItem('return_to_checkout_step') || 'review'
       
       if (returnToCheckout) {
         console.log('[Login] Returning to checkout after login')
@@ -160,6 +159,14 @@ export function LoginPage({
         
         // Navigate directly to checkout at the specified step
         navigate(`/checkout?step=${returnToCheckoutStep}`)
+        return
+      }
+      
+      // This ensures the cookie is properly available for subsequent requests
+      if (window.location.hostname === 'localhost') {
+        console.log('[Login] Redirecting to home page...')
+        // Navigate to home first, then the page will reload naturally
+        window.location.href = '/'
         return
       }
       
