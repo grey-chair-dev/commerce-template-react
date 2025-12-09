@@ -439,7 +439,7 @@ function App() {
         navigate('/profile')
       }
     }
-  }, [user, isLoading, location.pathname, navigate, checkoutStep])
+  }, [user, isLoading, location.pathname, navigate, setContactForm])
 
   // Handle return to checkout after login/signup (when redirected to home page)
   useEffect(() => {
