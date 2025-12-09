@@ -322,7 +322,7 @@ export function ProfilePage({
         onSearch={onSearch}
         onProductSelect={onProductSelect}
       />
-      <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 pt-40 pb-8 sm:px-6 sm:pt-48 lg:px-8 lg:pt-56">
+      <div className="mx-auto flex min-h-screen max-w-4xl flex-col px-4 pt-24 pb-8 sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">
         {/* Page Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
