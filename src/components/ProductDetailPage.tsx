@@ -96,17 +96,22 @@ export function ProductDetailPage({
   
   const gallery = buildGallery(product)
   const isOnSale = product.stockCount <= 10
-  const isSaved = wishlistFeatureEnabled && onToggleWishlist
-    ? useMemo(() => {
-        try {
-          const stored = localStorage.getItem('wishlist')
-          const wishlist = stored ? JSON.parse(stored) : []
-          return wishlist.some((item: Product) => item.id === product.id)
-        } catch {
-          return false
-        }
-      }, [product.id])
-    : false
+  
+  // Move useMemo outside conditional - hooks must be called unconditionally
+  const wishlistCheck = useMemo(() => {
+    if (!wishlistFeatureEnabled || !onToggleWishlist) {
+      return false
+    }
+    try {
+      const stored = localStorage.getItem('wishlist')
+      const wishlist = stored ? JSON.parse(stored) : []
+      return wishlist.some((item: Product) => item.id === product.id)
+    } catch {
+      return false
+    }
+  }, [wishlistFeatureEnabled, onToggleWishlist, product.id])
+  
+  const isSaved = wishlistCheck
 
   const handleAddToCart = () => {
     onAddToCart(product, quantity)
