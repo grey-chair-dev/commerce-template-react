@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckoutAccountPage } from './CheckoutAccountPage'
 import { CheckoutContactPage } from './CheckoutContactPage'
 import { CheckoutReviewPage } from './CheckoutReviewPage'
+import { SpinningRecord } from './SpinningRecord'
 import type { Product } from '../dataAdapter'
 import type { ContactForm } from '../utils/checkoutPayload'
 import type { User } from '@neondatabase/neon-auth'
@@ -73,6 +74,8 @@ export function CheckoutPage({
   const step = searchParams.get('step') || 'account'
   const redirectingRef = useRef(false)
   const hasSetContactFormRef = useRef(false)
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const prevStepRef = useRef(step)
 
   // Redirect to account step if cart is empty
   useEffect(() => {
@@ -114,6 +117,32 @@ export function CheckoutPage({
       hasSetContactFormRef.current = false
     }
   }, [step])
+
+  // Track step transitions for loading state
+  useEffect(() => {
+    if (prevStepRef.current !== step) {
+      setIsTransitioning(true)
+      prevStepRef.current = step
+      // Hide loading after a short delay to allow component to render
+      const timer = setTimeout(() => {
+        setIsTransitioning(false)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [step])
+
+  // Show loading state during redirects
+  useEffect(() => {
+    if (redirectingRef.current) {
+      setIsTransitioning(true)
+    } else {
+      // Small delay before hiding to ensure smooth transition
+      const timer = setTimeout(() => {
+        setIsTransitioning(false)
+      }, 200)
+      return () => clearTimeout(timer)
+    }
+  }, [redirectingRef.current])
 
   // If review step but no contact form, redirect to account
   // BUT: Don't redirect if we just set the contact form for a logged-in user
