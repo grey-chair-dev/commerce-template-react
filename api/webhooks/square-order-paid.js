@@ -412,7 +412,23 @@ async function processOrderUpdate(sql, event) {
     
     // Check if webhook payload is sparse (missing critical data)
     // Square sometimes sends minimal payloads with only status changes
-    const isPayloadSparse = extractedLineItems.length === 0 || totalAmount === 0 || !orderObject?.line_items;
+    // Check multiple conditions to catch all sparse payload scenarios
+    const hasLineItems = extractedLineItems.length > 0;
+    const hasAmounts = totalAmount > 0;
+    const hasLineItemsInObject = orderObject?.line_items && Array.isArray(orderObject.line_items) && orderObject.line_items.length > 0;
+    const hasLineItemsProperty = orderObject?.lineItems && Array.isArray(orderObject.lineItems) && orderObject.lineItems.length > 0;
+    
+    const isPayloadSparse = !hasLineItems || (!hasAmounts && !hasLineItemsInObject && !hasLineItemsProperty);
+    
+    console.log(`[Webhook] Payload completeness check:`, {
+      hasLineItems,
+      hasAmounts,
+      hasLineItemsInObject,
+      hasLineItemsProperty,
+      isPayloadSparse,
+      extractedItemsCount: extractedLineItems.length,
+      totalAmount,
+    });
     
     if (isPayloadSparse) {
       console.warn(`[Webhook] ⚠️  Webhook payload is sparse (${extractedLineItems.length} items, $${totalAmount} total)`);
