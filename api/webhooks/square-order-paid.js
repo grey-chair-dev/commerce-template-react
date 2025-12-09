@@ -1317,23 +1317,16 @@ async function processPaymentEvent(sql, event) {
  * Main handler function
  */
 export default async function handler(req, res) {
-  // Log ALL incoming requests to this endpoint (even non-POST)
-  console.log(`[Webhook] ========== INCOMING REQUEST ==========`);
-  console.log(`[Webhook] Method: ${req.method}`);
-  console.log(`[Webhook] URL: ${req.url}`);
-  console.log(`[Webhook] Headers:`, Object.keys(req.headers));
-  console.log(`[Webhook] Has body: ${!!req.body}`);
-  console.log(`[Webhook] Body type: ${typeof req.body}`);
-  console.log(`[Webhook] Body is object: ${typeof req.body === 'object'}`);
-  console.log(`[Webhook] Body is Buffer: ${Buffer.isBuffer(req.body)}`);
-  
   // Only allow POST requests
   if (req.method !== 'POST') {
     console.log(`[Webhook] Rejected: Method ${req.method} not allowed`);
     return res.status(405).json({ error: 'Method not allowed' });
   }
   
-  console.log(`[Webhook] POST request received - processing webhook...`);
+  // Log incoming webhook (condensed)
+  const hasBody = !!req.body;
+  const bodyType = typeof req.body;
+  console.log(`[Webhook] POST ${req.url} | Body: ${hasBody ? `${bodyType}` : 'none'}`);
   
   try {
     // Get environment variables
@@ -1404,12 +1397,8 @@ export default async function handler(req, res) {
       }
     }
     
-    console.log('Body received:', {
-      bodyType: typeof req.body,
-      bodyLength: rawBody?.length || 0,
-      hasPayload: !!payload,
-      payloadType: payload?.type || 'unknown',
-    });
+    // Log payload type (condensed)
+    console.log(`[Webhook] Payload: ${payload?.type || 'unknown'} (${rawBody?.length || 0} bytes)`);
     
     // Verify webhook signature
     // Square sends signature in X-Square-Signature header
@@ -1417,15 +1406,8 @@ export default async function handler(req, res) {
                      req.headers['x-square-hmacsha256-signature'] ||
                      req.headers['x-square-hmac-sha256-signature'];
     
-    console.log('Signature verification:', {
-      hasSignature: !!signature,
-      signaturePrefix: signature ? signature.substring(0, 30) + '...' : 'none',
-      relevantHeaders: Object.keys(req.headers).filter(h => 
-        h.toLowerCase().includes('square') || 
-        h.toLowerCase().includes('signature') ||
-        h.toLowerCase().startsWith('x-')
-      ),
-    });
+    // Log signature verification (condensed)
+    console.log(`[Webhook] Signature: ${signature ? 'present' : 'missing'}`);
     
     // Require signature for security - return 403 if missing or invalid
     if (!signature) {
@@ -1489,8 +1471,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid payload' });
     }
     
-    console.log(`📦 Received Square webhook: ${payload.type}`);
-    console.log(`[Webhook] Full payload structure:`, JSON.stringify(payload, null, 2).substring(0, 2000));
+    console.log(`[Webhook] Processing: ${payload.type}`);
     
     // Initialize Neon database client
     const sql = neon(databaseUrl);
