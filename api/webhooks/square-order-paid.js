@@ -1541,61 +1541,91 @@ async function processPaymentEvent(sql, event) {
 
 /**
  * Read raw body from request stream
- * This is necessary for signature verification in Vercel serverless functions
- * 
- * With bodyParser disabled via config, the body should be available as a stream
+ * CRITICAL: This MUST read from the stream BEFORE any parsing happens
+ * Once the stream is consumed, we cannot get the raw bytes needed for signature verification
  */
 async function getRawBody(req) {
-  // Strategy 1: Check if body is already raw (Buffer or string) - this happens when bodyParser is disabled
-  if (req.body) {
-    if (Buffer.isBuffer(req.body)) {
-      return req.body.toString('utf8');
-    }
-    if (typeof req.body === 'string') {
-      return req.body;
-    }
+  // CRITICAL: Try to read from stream FIRST (before checking req.body)
+  // This is the only way to get the exact raw bytes that Square signed
+  // If the stream is still readable, we can get the raw body
+  
+  // Check if stream is readable (hasn't been consumed yet)
+  if (req.readable && !req.readableEnded) {
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      let hasData = false;
+      
+      // Read data chunks as they arrive
+      req.on('data', (chunk) => {
+        hasData = true;
+        // Preserve chunk as Buffer to maintain exact bytes
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      
+      // When stream ends, concatenate all chunks
+      req.on('end', () => {
+        if (hasData) {
+          const rawBodyBuffer = Buffer.concat(chunks);
+          resolve(rawBodyBuffer.toString('utf8'));
+        } else {
+          resolve(null);
+        }
+      });
+      
+      // Handle stream errors
+      req.on('error', (error) => {
+        console.error('[getRawBody] Stream error:', error.message);
+        reject(error);
+      });
+      
+      // Timeout protection (10 seconds)
+      const timeout = setTimeout(() => {
+        if (!hasData) {
+          req.removeAllListeners();
+          resolve(null);
+        }
+      }, 10000);
+      
+      // Clear timeout if we get data
+      req.once('data', () => {
+        clearTimeout(timeout);
+      });
+    });
   }
   
-  // Strategy 2: Read from request stream (when bodyParser is disabled, body comes as stream)
-  // Check if stream is still readable
-  if (req.readableEnded || !req.readable) {
-    // Stream already consumed - body was likely parsed
-    // This shouldn't happen if config.bodyParser: false works, but handle gracefully
-    return null;
+  // Strategy 2: Body is already a Buffer (bodyParser: false worked)
+  if (Buffer.isBuffer(req.body)) {
+    return req.body.toString('utf8');
   }
   
-  return new Promise((resolve, reject) => {
-    let rawBody = Buffer.alloc(0);
-    let hasData = false;
+  // Strategy 3: Body is a string (some Vercel configurations)
+  if (typeof req.body === 'string') {
+    return req.body;
+  }
+  
+  // Strategy 4: Stream was already consumed - body was parsed by Vercel
+  // This is a CRITICAL security issue - we cannot verify signature
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    console.error('❌ CRITICAL SECURITY ERROR: Cannot read raw request body');
+    console.error('❌ Stream was already consumed - body was parsed by Vercel');
+    console.error('❌ This prevents secure signature verification');
+    console.error('❌ Possible causes:');
+    console.error('   1. bodyParser: false not working in Vercel');
+    console.error('   2. Middleware or framework parsed body before handler');
+    console.error('   3. Request stream already consumed');
     
-    // Handle data chunks - accumulate as Buffer for proper binary handling
-    req.on('data', (chunk) => {
-      hasData = true;
-      rawBody = Buffer.concat([rawBody, Buffer.from(chunk)]);
-    });
+    // In production, we MUST reject requests without raw body
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+      return null; // Will trigger rejection
+    }
     
-    // Handle end of stream
-    req.on('end', () => {
-      if (hasData) {
-        resolve(rawBody.toString('utf8'));
-      } else {
-        resolve(null);
-      }
-    });
-    
-    // Handle errors
-    req.on('error', (error) => {
-      reject(error);
-    });
-    
-    // Set timeout to prevent hanging (10 seconds)
-    setTimeout(() => {
-      if (!hasData) {
-        req.removeAllListeners();
-        resolve(null);
-      }
-    }, 10000);
-  });
+    // Development fallback (INSECURE - only for testing)
+    console.warn('⚠️  DEVELOPMENT MODE: Attempting to reconstruct body from parsed object');
+    console.warn('⚠️  This will NOT work for signature verification - signatures will fail');
+    return JSON.stringify(req.body, null, 0);
+  }
+  
+  return null;
 }
 
 /**
@@ -1621,6 +1651,40 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   
+  // CRITICAL: Get raw body FIRST, before ANY other processing
+  // This MUST happen before we touch req.body or do anything else
+  // Once the stream is consumed, we cannot get the raw bytes needed for signature verification
+  let rawBody;
+  try {
+    rawBody = await getRawBody(req);
+  } catch (streamError) {
+    log.error('Error reading request body stream', streamError);
+    return res.status(400).json({ error: 'Failed to read request body' });
+  }
+  
+  if (!rawBody || rawBody.length === 0) {
+    // CRITICAL: Cannot get raw body - signature verification cannot proceed securely
+    console.error('❌ CRITICAL SECURITY ERROR: Cannot read raw request body');
+    console.error('❌ This prevents secure signature verification');
+    
+    // In production, we MUST reject requests without raw body
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+      return res.status(500).json({ 
+        error: 'Server configuration error',
+        message: 'Cannot read raw request body for signature verification. This is a security issue.',
+      });
+    }
+    
+    // Development fallback (INSECURE - only for testing)
+    console.warn('⚠️  DEVELOPMENT MODE: Cannot verify signature - raw body unavailable');
+    console.warn('⚠️  DO NOT USE IN PRODUCTION');
+    
+    if (!req.body || (req.body && typeof req.body === 'object' && Object.keys(req.body).length === 0)) {
+      log.error('No request body received');
+      return res.status(400).json({ error: 'Missing request body' });
+    }
+  }
+  
   try {
     const signatureKey = process.env.ORDER_WEBHOOK_SIGNATURE_KEY || 
                          process.env.SQUARE_SIGNATURE_KEY || 
@@ -1642,24 +1706,10 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Database not configured' });
     }
     
-    // Get raw body for signature verification
-    let rawBody;
+    // Parse the raw body to get the payload
     let payload;
-    
     try {
-      rawBody = await getRawBody(req);
-    } catch (streamError) {
-      log.error('Error reading request body', streamError);
-      return res.status(400).json({ error: 'Failed to read request body' });
-    }
-    
-    if (!rawBody || rawBody.length === 0) {
-      log.error('No request body received');
-      return res.status(400).json({ error: 'Missing request body' });
-    }
-    
-    try {
-      payload = JSON.parse(rawBody);
+      payload = rawBody ? JSON.parse(rawBody) : req.body;
     } catch (e) {
       log.error('Failed to parse JSON body', e);
       return res.status(400).json({ error: 'Invalid JSON body' });

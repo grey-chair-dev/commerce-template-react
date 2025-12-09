@@ -182,70 +182,98 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
-  if (!signatureKey) {
-    console.warn('[Webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not configured, skipping signature verification')
-  }
-
-  // Get the raw body for signature verification
-  // CRITICAL: We need the exact raw bytes that Square signed
+  // CRITICAL: Get raw body FIRST, before ANY other processing
+  // This MUST happen before we touch req.body or do anything else
+  // Once the stream is consumed, we cannot get the raw bytes needed for signature verification
   let rawBody: string | null = null;
   
-  // Strategy 1: Check if body is already a Buffer (bodyParser: false should provide this)
-  if (Buffer.isBuffer(req.body)) {
-    rawBody = req.body.toString('utf8');
-  }
-  // Strategy 2: Check if body is a string
-  else if (typeof req.body === 'string') {
-    rawBody = req.body;
-  }
-  // Strategy 3: Try to read from request stream
-  else if (!req.body || (req.body && typeof req.body === 'object' && Object.keys(req.body).length === 0)) {
-    // Read from stream (fallback)
-    rawBody = await new Promise<string | null>((resolve) => {
-      let body = Buffer.alloc(0);
+  // Strategy 1: Try to read from stream FIRST (before checking req.body)
+  // This is the only way to get the exact raw bytes that Square signed
+  if (req.readable && !req.readableEnded) {
+    rawBody = await new Promise<string | null>((resolve, reject) => {
+      const chunks: Buffer[] = [];
       let hasData = false;
       
+      // Read data chunks as they arrive
       req.on('data', (chunk) => {
         hasData = true;
-        body = Buffer.concat([body, Buffer.from(chunk)]);
+        // Preserve chunk as Buffer to maintain exact bytes
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       });
       
+      // When stream ends, concatenate all chunks
       req.on('end', () => {
-        resolve(hasData ? body.toString('utf8') : null);
+        if (hasData) {
+          const rawBodyBuffer = Buffer.concat(chunks);
+          resolve(rawBodyBuffer.toString('utf8'));
+        } else {
+          resolve(null);
+        }
       });
       
-      req.on('error', () => resolve(null));
+      // Handle stream errors
+      req.on('error', (error) => {
+        console.error('[Webhook] Stream error:', error.message);
+        reject(error);
+      });
       
-      setTimeout(() => {
+      // Timeout protection (10 seconds)
+      const timeout = setTimeout(() => {
         if (!hasData) {
           req.removeAllListeners();
           resolve(null);
         }
       }, 10000);
-    });
+      
+      // Clear timeout if we get data
+      req.once('data', () => {
+        clearTimeout(timeout);
+      });
+    }).catch(() => null);
   }
   
-  // Strategy 4: Body was parsed - cannot verify signature securely
-  if (!rawBody && req.body && typeof req.body === 'object') {
-    console.error('[Webhook] CRITICAL: Body was parsed by Vercel - signature verification cannot work securely');
-    console.error('[Webhook] This is a security issue - fix bodyParser: false in vercel.json');
+  // Strategy 2: Body is already a Buffer (bodyParser: false worked)
+  if (!rawBody && Buffer.isBuffer(req.body)) {
+    rawBody = req.body.toString('utf8');
+  }
+  
+  // Strategy 3: Body is a string (some Vercel configurations)
+  if (!rawBody && typeof req.body === 'string') {
+    rawBody = req.body;
+  }
+  
+  // Strategy 4: Stream was already consumed - body was parsed by Vercel
+  // This is a CRITICAL security issue - we cannot verify signature
+  if (!rawBody && req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+    console.error('[Webhook] CRITICAL SECURITY ERROR: Cannot read raw request body');
+    console.error('[Webhook] Stream was already consumed - body was parsed by Vercel');
+    console.error('[Webhook] This prevents secure signature verification');
+    console.error('[Webhook] Possible causes:');
+    console.error('   1. bodyParser: false not working in Vercel');
+    console.error('   2. Middleware or framework parsed body before handler');
+    console.error('   3. Request stream already consumed');
     
-    // In production, reject requests without raw body
+    // In production, we MUST reject requests without raw body
     if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
       return res.status(500).json({
         error: 'Server configuration error',
-        message: 'Cannot read raw request body for signature verification',
+        message: 'Cannot read raw request body for signature verification. This is a security issue.',
       });
     }
     
-    // Development fallback (INSECURE)
+    // Development fallback (INSECURE - only for testing)
+    console.warn('[Webhook] DEVELOPMENT MODE: Attempting to reconstruct body from parsed object');
+    console.warn('[Webhook] This will NOT work for signature verification - signatures will fail');
     rawBody = JSON.stringify(req.body, null, 0);
-    console.warn('[Webhook] DEVELOPMENT MODE: Using parsed body (INSECURE)');
   }
   
   if (!rawBody) {
     return res.status(400).json({ error: 'Missing request body' });
+  }
+
+  const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
+  if (!signatureKey) {
+    console.warn('[Webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not configured, skipping signature verification')
   }
   
   // Verify webhook signature if key is configured
