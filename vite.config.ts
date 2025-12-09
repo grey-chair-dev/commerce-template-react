@@ -3,7 +3,12 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      // Fix for HMR issues with react-refresh
+      jsxRuntime: 'automatic',
+    }),
+  ],
   assetsInclude: ['**/*.html'],
   build: {
     outDir: 'dist',
@@ -12,6 +17,10 @@ export default defineConfig({
   server: {
     fs: {
       strict: false,
+    },
+    hmr: {
+      // Fix for HMR connection issues
+      overlay: true,
     },
     // Proxy API requests to Vercel dev (if running on port 3000)
     // Or update VITE_PRODUCTS_SNAPSHOT_URL to point to production API
@@ -30,5 +39,9 @@ export default defineConfig({
         },
       },
     },
+  },
+  optimizeDeps: {
+    // Force re-optimization to fix module resolution issues
+    force: true,
   },
 })
