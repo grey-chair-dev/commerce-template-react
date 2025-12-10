@@ -243,7 +243,10 @@ async function processInventoryCountUpdate(pool, event) {
     
     // Update products cache to reflect the new stock count
     // This ensures the frontend sees the updated inventory immediately
+    // Use a savepoint so cache update failures don't abort the main transaction
     try {
+      await client.query('SAVEPOINT cache_update');
+      
       const cacheKey = 'square:products:spiralgroove';
       const cacheResult = await client.query(`
         SELECT value FROM product_cache WHERE key = $1
@@ -287,9 +290,21 @@ async function processInventoryCountUpdate(pool, event) {
       } else {
         console.warn(`⚠️  Cache not found for key ${cacheKey}, skipping cache update`);
       }
+      
+      await client.query('RELEASE SAVEPOINT cache_update');
     } catch (cacheError) {
+      // Rollback to savepoint to continue with main transaction
+      try {
+        await client.query('ROLLBACK TO SAVEPOINT cache_update');
+      } catch (rollbackError) {
+        // If savepoint doesn't exist, the transaction might already be aborted
+        // This is okay - we'll handle it in the outer error handler
+        console.warn(`⚠️  Could not rollback to savepoint: ${rollbackError.message}`);
+      }
       // Log but don't fail the transaction if cache update fails
+      // The product update already succeeded, so this is just a cache miss
       console.warn(`⚠️  Failed to update products cache: ${cacheError.message}`);
+      console.warn(`   This is non-critical - product inventory was updated successfully`);
     }
     
     // Create inventory record for audit trail
