@@ -255,7 +255,7 @@ async function processOrderUpdate(sql, event) {
     
     // Extract fulfillment state from order fulfillments
     let fulfillmentState = null;
-    const fulfillments = orderObject?.fulfillments || [];
+    let fulfillments = orderObject?.fulfillments || [];
     
     if (fulfillments.length > 0) {
       const firstFulfillment = fulfillments[0];
@@ -301,15 +301,15 @@ async function processOrderUpdate(sql, event) {
     // 2. Extract total_amount from order totals
     const netAmounts = orderObject?.net_amounts || {};
     const totalMoney = netAmounts.total_money || {};
-    const totalAmount = totalMoney.amount ? Number(totalMoney.amount) / 100 : 0; // Convert cents to dollars
+    let totalAmount = totalMoney.amount ? Number(totalMoney.amount) / 100 : 0; // Convert cents to dollars
     
     // Also extract subtotal, tax, shipping for completeness
     const subtotalMoney = netAmounts.total_money || totalMoney || {};
-    const subtotalAmount = subtotalMoney.amount ? Number(subtotalMoney.amount) / 100 : 0;
+    let subtotalAmount = subtotalMoney.amount ? Number(subtotalMoney.amount) / 100 : 0;
     const taxMoney = netAmounts.tax_money || {};
-    const taxAmount = taxMoney.amount ? Number(taxMoney.amount) / 100 : 0;
+    let taxAmount = taxMoney.amount ? Number(taxMoney.amount) / 100 : 0;
     const shippingMoney = netAmounts.shipping_money || {};
-    const shippingAmount = shippingMoney.amount ? Number(shippingMoney.amount) / 100 : 0;
+    let shippingAmount = shippingMoney.amount ? Number(shippingMoney.amount) / 100 : 0;
     
     // 3. Extract customer_id from Square order metadata
     // We store customer_id in metadata.note or metadata.customer_id during checkout
@@ -435,7 +435,7 @@ async function processOrderUpdate(sql, event) {
     
     // 5. Extract detailed line_items data
     const lineItems = orderObject?.line_items || [];
-    const extractedLineItems = lineItems.map((item, index) => {
+    let extractedLineItems = lineItems.map((item, index) => {
       // Extract item details
       const basePriceMoney = item.base_price_money || {};
       const basePrice = basePriceMoney.amount ? Number(basePriceMoney.amount) / 100 : 0;
