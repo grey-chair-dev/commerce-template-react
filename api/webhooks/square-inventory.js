@@ -573,10 +573,11 @@ export default async function handler(req, res) {
     });
     
     // Verify webhook signature
-    // Square sends signature in X-Square-Signature header
-    const signature = req.headers['x-square-signature'] || 
-                     req.headers['x-square-hmacsha256-signature'] ||
-                     req.headers['x-square-hmac-sha256-signature'];
+    // Square sends signature in x-square-hmacsha256-signature header (preferred)
+    // Also check x-square-signature as fallback for older webhook subscriptions
+    const signature = req.headers['x-square-hmacsha256-signature'] ||
+                     req.headers['x-square-hmac-sha256-signature'] ||
+                     req.headers['x-square-signature'];
     
     // Log all headers for debugging
     const allHeaders = Object.keys(req.headers);

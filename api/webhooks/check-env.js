@@ -94,6 +94,25 @@ export default async function handler(req, res) {
         ? process.env.SPR_DATABASE_URL.substring(0, 20) + '...' 
         : 'not set',
     },
+    
+    // Square environment configuration
+    SQUARE_ENVIRONMENT: {
+      set: !!process.env.SQUARE_ENVIRONMENT,
+      value: process.env.SQUARE_ENVIRONMENT || 'not set',
+    },
+    
+    SQUARE_ACCESS_TOKEN: {
+      set: !!process.env.SQUARE_ACCESS_TOKEN,
+      length: process.env.SQUARE_ACCESS_TOKEN?.length || 0,
+      preview: process.env.SQUARE_ACCESS_TOKEN 
+        ? process.env.SQUARE_ACCESS_TOKEN.substring(0, 12) + '...' 
+        : 'not set',
+    },
+    
+    SQUARE_LOCATION_ID: {
+      set: !!process.env.SQUARE_LOCATION_ID,
+      value: process.env.SQUARE_LOCATION_ID || 'not set',
+    },
   };
 
   // Determine which keys would be used by each webhook
@@ -160,11 +179,20 @@ export default async function handler(req, res) {
       },
     },
     allEnvironmentVariables: envVars,
+    squareConfiguration: {
+      environment: process.env.SQUARE_ENVIRONMENT || 'not set',
+      accessTokenSet: !!process.env.SQUARE_ACCESS_TOKEN,
+      locationIdSet: !!process.env.SQUARE_LOCATION_ID,
+      status: (process.env.SQUARE_ENVIRONMENT === 'sandbox' || process.env.SQUARE_ENVIRONMENT === 'production') 
+        ? '✅ Configured' 
+        : '⚠️  Check SQUARE_ENVIRONMENT (should be "sandbox" or "production")',
+    },
     recommendations: [
       !inventoryKey && 'Set INVENTORY_WEBHOOK_SIGNATURE_KEY in Vercel environment variables',
       !orderKey && 'Set ORDER_WEBHOOK_SIGNATURE_KEY in Vercel environment variables',
       !databaseUrl && 'Set SPR_NEON_DATABSE_URL or DATABASE_URL in Vercel environment variables',
       inventoryKey && orderKey && inventoryKey === orderKey && '⚠️  Both webhooks are using the same signature key. Each webhook subscription should have its own unique key.',
+      (!process.env.SQUARE_ENVIRONMENT || (process.env.SQUARE_ENVIRONMENT !== 'sandbox' && process.env.SQUARE_ENVIRONMENT !== 'production')) && '⚠️  Set SQUARE_ENVIRONMENT to "sandbox" or "production" in Vercel environment variables',
     ].filter(Boolean),
   });
 }

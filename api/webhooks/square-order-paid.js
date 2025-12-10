@@ -1774,11 +1774,11 @@ export default async function handler(req, res) {
     }
     
     // Verify webhook signature
-    // CRITICAL: Use the raw Buffer for signature verification, not the UTF-8 string
-    // Square signs the exact raw bytes, so we must hash the Buffer directly
-    const signature = req.headers['x-square-signature'] || 
-                     req.headers['x-square-hmacsha256-signature'] ||
-                     req.headers['x-square-hmac-sha256-signature'];
+    // Square sends signature in x-square-hmacsha256-signature header (preferred)
+    // Also check x-square-signature as fallback for older webhook subscriptions
+    const signature = req.headers['x-square-hmacsha256-signature'] ||
+                     req.headers['x-square-hmac-sha256-signature'] ||
+                     req.headers['x-square-signature'];
     
     if (!signature) {
       log.error('Missing webhook signature header');
